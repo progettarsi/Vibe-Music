@@ -2,6 +2,7 @@ package com.progettarsi.openmusic.viewmodel
 
 import android.content.ComponentName
 import android.content.Context
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -9,6 +10,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -19,8 +21,12 @@ import kotlinx.coroutines.launch
 
 class MusicViewModel : ViewModel() {
     var isPlaying by mutableStateOf(false)
+    var isBuffering by mutableStateOf(false)
+
     var currentTitle by mutableStateOf("Nessuna Traccia")
     var currentArtist by mutableStateOf("Tocca Play per testare")
+    var currentCoverUrl by mutableStateOf("")
+
     var progress by mutableFloatStateOf(0f)
     var duration by mutableFloatStateOf(1f)
 
@@ -33,11 +39,26 @@ class MusicViewModel : ViewModel() {
         controllerFuture.addListener({
             mediaController = controllerFuture.get()
             mediaController?.addListener(object : Player.Listener {
-                override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
+                override fun onIsPlayingChanged(playing: Boolean) {
+                    isPlaying = playing
+                }
+
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    isBuffering = (playbackState == Player.STATE_BUFFERING)
+                }
+
                 override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                    // Aggiorna metadati se presenti
-                    mediaItem?.mediaMetadata?.title?.let { currentTitle = it.toString() }
-                    mediaItem?.mediaMetadata?.artist?.let { currentArtist = it.toString() }
+                    mediaItem?.mediaMetadata?.let {
+                        // Aggiorna titolo e artista se presenti
+                        if (!it.title.isNullOrEmpty()) currentTitle = it.title.toString()
+                        if (!it.artist.isNullOrEmpty()) currentArtist = it.artist.toString()
+
+                        // Aggiorna la copertina SOLO se il file ne ha una vera
+                        // Altrimenti manteniamo quella impostata manualmente in playTestTrack
+                        if (it.artworkUri != null) {
+                            currentCoverUrl = it.artworkUri.toString()
+                        }
+                    }
                     duration = mediaController?.duration?.toFloat()?.coerceAtLeast(1f) ?: 1f
                 }
             })
@@ -46,16 +67,24 @@ class MusicViewModel : ViewModel() {
     }
 
     fun playTestTrack() {
-        // Un MP3 gratuito e sicuro per testare lo streaming
+        // URL Copertina Test (Viandante sul mare di nebbia)
+        val testCoverUrl = "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/Caspar_David_Friedrich_-_Wanderer_above_the_Sea_of_Fog_-_Google_Art_Project.jpg/1024px-Caspar_David_Friedrich_-_Wanderer_above_the_Sea_of_Fog_-_Google_Art_Project.jpg"
+
         val item = MediaItem.Builder()
-            .setUri("https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3")
+            // File audio veloce da Google
+            .setUri("https://storage.googleapis.com/exoplayer-test-media-0/Jazz_In_Paris.mp3")
             .setMediaMetadata(
-                androidx.media3.common.MediaMetadata.Builder()
-                    .setTitle("Test Song Helix")
-                    .setArtist("SoundHelix Library")
+                MediaMetadata.Builder()
+                    .setTitle("Jazz in Paris")
+                    .setArtist("Google Samples")
+                    // Impostiamo l'artwork anche nei metadati per sicurezza
+                    .setArtworkUri(Uri.parse(testCoverUrl))
                     .build()
             )
             .build()
+
+        // FORZIAMO L'AGGIORNAMENTO DELLA UI SUBITO
+        currentCoverUrl = testCoverUrl
 
         mediaController?.setMediaItem(item)
         mediaController?.prepare()
@@ -73,11 +102,21 @@ class MusicViewModel : ViewModel() {
     private fun startProgressUpdater() {
         viewModelScope.launch {
             while (true) {
-                if (isPlaying && mediaController != null) {
-                    progress = mediaController!!.currentPosition.toFloat() / mediaController!!.duration.toFloat().coerceAtLeast(1f)
+                if (mediaController != null) {
+                    val currentPos = mediaController!!.currentPosition.toFloat()
+                    val totalDur = mediaController!!.duration.toFloat()
+                    if (totalDur > 0) {
+                        duration = totalDur
+                        progress = currentPos / totalDur
+                    }
                 }
                 delay(500)
             }
         }
+    }
+
+    override fun onCleared() {
+        mediaController?.release()
+        super.onCleared()
     }
 }

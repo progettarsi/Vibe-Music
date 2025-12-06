@@ -3,7 +3,6 @@ package com.progettarsi.openmusic
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -16,6 +15,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -30,31 +30,34 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
-import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.progettarsi.openmusic.ui.theme.* import com.progettarsi.openmusic.viewmodel.MusicViewModel // Import fondamentale
+import coil.compose.AsyncImage // Assicurati di avere questo import
+import com.progettarsi.openmusic.ui.theme.*
+import com.progettarsi.openmusic.viewmodel.MusicViewModel
 import kotlin.math.PI
 import kotlin.math.sin
 
 @Composable
 fun MusicPlayerScreen(
-    musicViewModel: MusicViewModel, // <-- ORA RICEVE IL VIEWMODEL REALE
+    musicViewModel: MusicViewModel,
     onCollapse: () -> Unit
 ) {
-    // Osserviamo i dati VERI dal ViewModel
     val isPlaying = musicViewModel.isPlaying
-    val progress = musicViewModel.progress
+    val isBuffering = musicViewModel.isBuffering
+    val realProgress = musicViewModel.progress
     val title = musicViewModel.currentTitle
     val artist = musicViewModel.currentArtist
+    val coverUrl = musicViewModel.currentCoverUrl // Recupera URL
 
-    // Stati UI locali
+    var scrubbingProgress by remember { mutableStateOf<Float?>(null) }
+    val effectiveProgress = scrubbingProgress ?: realProgress
+
     var isLoopOn by remember { mutableStateOf(false) }
     var isShuffleOn by remember { mutableStateOf(false) }
     var isLiked by remember { mutableStateOf(false) }
@@ -77,13 +80,24 @@ fun MusicPlayerScreen(
                 )
             }
     ) {
-        // SFONDO
-        Image(
-            painter = rememberVectorPainter(Icons.Default.Album),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize().offset(y = (offsetY * 0.5f).dp).alpha(0.6f)
-        )
+        // --- COPERTINA REALE ---
+        if (coverUrl.isNotEmpty()) {
+            AsyncImage(
+                model = coverUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .offset(y = (offsetY * 0.5f).dp)
+                    .alpha(0.6f)
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.DarkGray.copy(alpha = 0.3f))
+            )
+        }
 
         // SFUMATURE
         Column(modifier = Modifier.fillMaxSize()) {
@@ -107,47 +121,50 @@ fun MusicPlayerScreen(
                     Text(title, color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold, lineHeight = 40.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 IconButton(onClick = { isLiked = !isLiked }) {
-                    Icon(if(isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, null, tint = if(isLiked) PurplePrimary else Color.White, modifier = Modifier.size(32.dp))
+                    AnimatedContent(targetState = isLiked, label = "Like") { liked ->
+                        Icon(if(liked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, null, tint = if(liked) PurplePrimary else Color.White, modifier = Modifier.size(32.dp))
+                    }
                 }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
-
-            // Per ora Lyrics statiche
             Text("Testo della canzone in streaming...", color = TextGrey.copy(0.9f), fontSize = 18.sp, textAlign = TextAlign.Center)
-
             Spacer(modifier = Modifier.height(48.dp))
 
             // BARRA + PLAY
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.weight(1f).height(60.dp), contentAlignment = Alignment.CenterStart) {
                     InteractiveSquigglyBar(
-                        progress = progress,
-                        // Quando l'utente scorre, diciamo al ViewModel di saltare
-                        onProgressChange = { musicViewModel.seekTo(it) }
+                        progress = effectiveProgress,
+                        onProgressChange = { scrubbingProgress = it },
+                        onCommit = {
+                            musicViewModel.seekTo(it)
+                            scrubbingProgress = null
+                        }
                     )
                 }
 
-                IconButton(
-                    onClick = {
-                        // LOGICA TEST: Se non c'è nulla, carica la traccia di test. Altrimenti Play/Pause.
-                        if (musicViewModel.currentTitle == "Nessuna Traccia") {
-                            musicViewModel.playTestTrack()
-                        } else {
-                            musicViewModel.togglePlayPause()
+                Box(contentAlignment = Alignment.Center) {
+                    if (isBuffering) {
+                        CircularProgressIndicator(modifier = Modifier.size(56.dp), color = Color.White, strokeWidth = 3.dp)
+                    }
+                    IconButton(
+                        onClick = {
+                            if (musicViewModel.currentTitle == "Nessuna Traccia") musicViewModel.playTestTrack()
+                            else musicViewModel.togglePlayPause()
+                        },
+                        modifier = Modifier.size(56.dp).background(Color.White.copy(0.1f), CircleShape)
+                    ) {
+                        AnimatedContent(targetState = isPlaying, label = "Play") { playing ->
+                            Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(32.dp))
                         }
-                    },
-                    modifier = Modifier.size(56.dp).background(Color.White.copy(0.1f), CircleShape)
-                ) {
-                    AnimatedContent(targetState = isPlaying, label = "PlayAnim") { playing ->
-                        Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(32.dp))
                     }
                 }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // CONTROLLI EXTRA
+            // CONTROLLI
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 IconButton(onClick = { isLoopOn = !isLoopOn }) {
                     Icon(Icons.Default.AllInclusive, null, tint = if(isLoopOn) Color.White else TextGrey.copy(0.5f), modifier = Modifier.size(32.dp))
@@ -161,32 +178,41 @@ fun MusicPlayerScreen(
     }
 }
 
-// (Copia qui sotto anche la funzione InteractiveSquigglyBar dal vecchio file,
-// o assicurati che sia inclusa se l'hai copiata nel file precedente.
-// È identica a prima ma serve per compilare.)
+// BARRA INTERATTIVA (Lineare Fix)
 @Composable
-fun InteractiveSquigglyBar(progress: Float, onProgressChange: (Float) -> Unit) {
-    // ... INCOLLA QUI LA FUNZIONE InteractiveSquigglyBar CHE TI HO DATO PRIMA ...
-    // Se non ce l'hai sottomano, dimmelo e te la rimetto.
-    // (Per brevità non la ripeto se hai già il codice funzionante della barra)
-
-    // ECCOLA PER SICUREZZA:
+fun InteractiveSquigglyBar(
+    progress: Float,
+    onProgressChange: (Float) -> Unit,
+    onCommit: (Float) -> Unit
+) {
     var isScrubbing by remember { mutableStateOf(false) }
     val thumbRadius by animateDpAsState(if (isScrubbing) 16.dp else 8.dp, label = "Thumb")
+    val totalSeconds = 180
+    val currentSeconds = (totalSeconds * progress).toInt()
+    val timeString = String.format("%d:%02d", currentSeconds / 60, currentSeconds % 60)
 
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterStart) {
+        val width = maxWidth
         Canvas(Modifier.fillMaxWidth().height(40.dp).pointerInput(Unit) {
+            var currentDragProgress = 0f
             detectHorizontalDragGestures(
-                onDragStart = { isScrubbing = true },
-                onDragEnd = { isScrubbing = false },
-                onDragCancel = { isScrubbing = false },
+                onDragStart = { offset ->
+                    isScrubbing = true
+                    currentDragProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                },
+                onDragEnd = { isScrubbing = false; onCommit(currentDragProgress) },
+                onDragCancel = { isScrubbing = false; onCommit(currentDragProgress) },
                 onHorizontalDrag = { change, _ ->
                     change.consume()
-                    onProgressChange((change.position.x / size.width).coerceIn(0f, 1f))
+                    currentDragProgress = (change.position.x / size.width).coerceIn(0f, 1f)
+                    onProgressChange(currentDragProgress)
                 }
             )
         }.pointerInput(Unit) {
-            detectTapGestures { offset -> onProgressChange((offset.x / size.width).coerceIn(0f, 1f)) }
+            detectTapGestures { offset ->
+                val tapProgress = (offset.x / size.width).coerceIn(0f, 1f)
+                onProgressChange(tapProgress); onCommit(tapProgress)
+            }
         }) {
             val centerY = size.height / 2
             val path = Path().apply {
@@ -199,9 +225,14 @@ fun InteractiveSquigglyBar(progress: Float, onProgressChange: (Float) -> Unit) {
             clipRect(right = size.width * progress) {
                 drawPath(path, PurplePrimary, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
             }
+            // PUNTINO LINEARE
             val cx = size.width * progress
-            val cy = centerY + 15f * sin((cx / size.width) * 40f * PI.toFloat())
+            val cy = centerY
             drawCircle(Color.White, thumbRadius.toPx(), Offset(cx, cy))
+        }
+        AnimatedVisibility(isScrubbing, enter = fadeIn()+scaleIn(), exit = fadeOut()+scaleOut(), modifier = Modifier.align(Alignment.TopStart)) {
+            val offsetDp = (width * progress) - 15.dp
+            Text(timeString, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(x = offsetDp, y = (-10).dp).background(Color.Black.copy(0.7f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
         }
     }
 }
