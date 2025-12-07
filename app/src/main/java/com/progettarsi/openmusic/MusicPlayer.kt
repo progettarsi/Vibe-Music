@@ -1,5 +1,6 @@
 package com.progettarsi.openmusic
 
+import android.util.Log // Import per il Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -30,14 +31,17 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import coil.compose.AsyncImage // Assicurati di avere questo import
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.progettarsi.openmusic.ui.theme.*
 import com.progettarsi.openmusic.viewmodel.MusicViewModel
 import kotlin.math.PI
@@ -53,7 +57,9 @@ fun MusicPlayerScreen(
     val realProgress = musicViewModel.progress
     val title = musicViewModel.currentTitle
     val artist = musicViewModel.currentArtist
-    val coverUrl = musicViewModel.currentCoverUrl // Recupera URL
+
+    // URL dal ViewModel
+    val coverUrl = musicViewModel.currentCoverUrl
 
     var scrubbingProgress by remember { mutableStateOf<Float?>(null) }
     val effectiveProgress = scrubbingProgress ?: realProgress
@@ -80,18 +86,41 @@ fun MusicPlayerScreen(
                 )
             }
     ) {
-        // --- COPERTINA REALE ---
+        // --- LOGICA DI DEBUG IMMAGINE ---
+        val fallbackPainter = rememberVectorPainter(Icons.Default.Album)
+
+        // Se c'è un URL, stampalo nel Logcat
+        LaunchedEffect(coverUrl) {
+            Log.d("MusicPlayerDebug", "URL Immagine ricevuto: '$coverUrl'")
+        }
+
         if (coverUrl.isNotEmpty()) {
             AsyncImage(
-                model = coverUrl,
+                // Costruiamo una richiesta esplicita per catturare gli errori
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(coverUrl)
+                    .listener(
+                        onStart = { Log.d("MusicPlayerDebug", "Inizio caricamento immagine...") },
+                        onSuccess = { _, _ -> Log.d("MusicPlayerDebug", "Immagine caricata con SUCCESSO!") },
+                        onError = { _, result ->
+                            Log.e("MusicPlayerDebug", "ERRORE caricamento immagine: ${result.throwable.message}")
+                            result.throwable.printStackTrace()
+                        }
+                    )
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
                     .offset(y = (offsetY * 0.5f).dp)
-                    .alpha(0.6f)
+                    .alpha(0.6f),
+                placeholder = fallbackPainter,
+                error = fallbackPainter,
+                fallback = fallbackPainter
             )
         } else {
+            // Se l'URL è vuoto
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -113,7 +142,6 @@ fun MusicPlayerScreen(
         ) {
             Spacer(modifier = Modifier.weight(1f))
 
-            // INFO
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(artist, color = TextGrey, fontSize = 16.sp, fontWeight = FontWeight.Medium)
@@ -164,7 +192,6 @@ fun MusicPlayerScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            // CONTROLLI
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 IconButton(onClick = { isLoopOn = !isLoopOn }) {
                     Icon(Icons.Default.AllInclusive, null, tint = if(isLoopOn) Color.White else TextGrey.copy(0.5f), modifier = Modifier.size(32.dp))
@@ -225,7 +252,6 @@ fun InteractiveSquigglyBar(
             clipRect(right = size.width * progress) {
                 drawPath(path, PurplePrimary, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
             }
-            // PUNTINO LINEARE
             val cx = size.width * progress
             val cy = centerY
             drawCircle(Color.White, thumbRadius.toPx(), Offset(cx, cy))
