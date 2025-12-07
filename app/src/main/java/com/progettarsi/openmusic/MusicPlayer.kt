@@ -1,6 +1,6 @@
 package com.progettarsi.openmusic
 
-import android.util.Log // Import per il Log
+import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
@@ -76,12 +76,20 @@ fun MusicPlayerScreen(
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDragEnd = {
-                        if (offsetY > 150f) onCollapse()
-                        offsetY = 0f
+                        if (offsetY > 150f) {
+                            onCollapse()
+                            // FIX ANIMAZIONE: NON resettiamo offsetY a 0f qui!
+                            // Lasciamo che il player rimanga spostato in basso mentre svanisce.
+                            // Verrà ricreato a 0 alla prossima apertura.
+                        } else {
+                            offsetY = 0f // Resetta solo se l'utente annulla lo swipe
+                        }
                     },
                     onDrag = { change, dragAmount ->
                         change.consume()
-                        offsetY += dragAmount.y
+                        // Impediamo di trascinare verso l'alto (valori negativi)
+                        val newOffset = offsetY + dragAmount.y
+                        offsetY = newOffset.coerceAtLeast(0f)
                     }
                 )
             }
@@ -89,38 +97,28 @@ fun MusicPlayerScreen(
         // --- LOGICA DI DEBUG IMMAGINE ---
         val fallbackPainter = rememberVectorPainter(Icons.Default.Album)
 
-        // Se c'è un URL, stampalo nel Logcat
+        // Se c'è un URL, stampalo nel Logcat (utile per debug)
         LaunchedEffect(coverUrl) {
-            Log.d("MusicPlayerDebug", "URL Immagine ricevuto: '$coverUrl'")
+            if (coverUrl.isNotEmpty()) Log.d("MusicPlayerDebug", "URL Immagine: '$coverUrl'")
         }
 
         if (coverUrl.isNotEmpty()) {
             AsyncImage(
-                // Costruiamo una richiesta esplicita per catturare gli errori
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(coverUrl)
-                    .listener(
-                        onStart = { Log.d("MusicPlayerDebug", "Inizio caricamento immagine...") },
-                        onSuccess = { _, _ -> Log.d("MusicPlayerDebug", "Immagine caricata con SUCCESSO!") },
-                        onError = { _, result ->
-                            Log.e("MusicPlayerDebug", "ERRORE caricamento immagine: ${result.throwable.message}")
-                            result.throwable.printStackTrace()
-                        }
-                    )
                     .crossfade(true)
                     .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .offset(y = (offsetY * 0.5f).dp)
+                    .offset(y = (offsetY * 0.5f).dp) // Parallasse sullo sfondo
                     .alpha(0.6f),
                 placeholder = fallbackPainter,
                 error = fallbackPainter,
                 fallback = fallbackPainter
             )
         } else {
-            // Se l'URL è vuoto
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -137,7 +135,11 @@ fun MusicPlayerScreen(
 
         // CONTENUTO
         Column(
-            modifier = Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 24.dp).offset(y = offsetY.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .padding(horizontal = 24.dp)
+                .offset(y = offsetY.dp), // Il contenuto segue il dito
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(modifier = Modifier.weight(1f))
@@ -214,7 +216,7 @@ fun InteractiveSquigglyBar(
 ) {
     var isScrubbing by remember { mutableStateOf(false) }
     val thumbRadius by animateDpAsState(if (isScrubbing) 16.dp else 8.dp, label = "Thumb")
-    val totalSeconds = 180
+    val totalSeconds = 180 // Durata finta per visualizzazione (quella reale è gestita dal ViewModel)
     val currentSeconds = (totalSeconds * progress).toInt()
     val timeString = String.format("%d:%02d", currentSeconds / 60, currentSeconds % 60)
 

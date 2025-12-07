@@ -12,9 +12,15 @@ interface YouTubeMusicApi {
         @Body body: JsonObject
     ): JsonObject
 
-    // NUOVO ENDPOINT: Chiede il file audio
     @POST("youtubei/v1/player")
     suspend fun player(
+        @Query("key") apiKey: String,
+        @Body body: JsonObject
+    ): JsonObject
+
+    // NUOVO ENDPOINT: Home Screen e Playlist
+    @POST("youtubei/v1/browse")
+    suspend fun browse(
         @Query("key") apiKey: String,
         @Body body: JsonObject
     ): JsonObject

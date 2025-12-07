@@ -17,37 +17,54 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.progettarsi.openmusic.model.Song
+import com.progettarsi.openmusic.model.SongParser
+import com.progettarsi.openmusic.network.YouTubeClient
 import com.progettarsi.openmusic.network.YouTubeRepository
 import com.progettarsi.openmusic.service.MusicService
+import com.progettarsi.openmusic.utils.CookieManager
 import com.google.common.util.concurrent.MoreExecutors
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MusicViewModel : ViewModel() {
     private val repository = YouTubeRepository()
-
-    // Job per gestire la ricerca dinamica (Debouncing)
     private var searchJob: Job? = null
 
-    // STATI
+    // Gestione Cookie e Stato Login
+    private lateinit var cookieManager: CookieManager
+    var isLoggedIn by mutableStateOf(false)
+        private set
+
+    // STATI PLAYER
     var isPlaying by mutableStateOf(false)
     var isBuffering by mutableStateOf(false)
     var currentTitle by mutableStateOf("Nessuna Traccia")
     var currentArtist by mutableStateOf("Cerca una canzone...")
     var currentCoverUrl by mutableStateOf("")
-
     var progress by mutableFloatStateOf(0f)
     var duration by mutableFloatStateOf(1f)
+    var currentSong by mutableStateOf<Song?>(null)
 
+    // STATI RICERCA
     var searchResults = mutableStateListOf<Song>()
     var isSearchingOnline by mutableStateOf(false)
-    // Nuovo stato per gestire errori di ricerca visivi
     var searchError by mutableStateOf<String?>(null)
+
+    // Stato Home
+    var homeContent by mutableStateOf<List<Any>>(emptyList())
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading = _isLoading.asStateFlow()
 
     private var mediaController: MediaController? = null
 
     fun initPlayer(context: Context) {
+        cookieManager = CookieManager(context)
+        YouTubeClient.currentCookie = cookieManager.loadCookie()
+        isLoggedIn = YouTubeClient.currentCookie.isNotBlank()
+
         val sessionToken = SessionToken(context, ComponentName(context, MusicService::class.java))
         val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
 
@@ -59,9 +76,15 @@ class MusicViewModel : ViewModel() {
                     override fun onPlaybackStateChanged(playbackState: Int) { isBuffering = (playbackState == Player.STATE_BUFFERING) }
                     override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                         mediaItem?.mediaMetadata?.let {
-                            if (!it.title.isNullOrEmpty()) currentTitle = it.title.toString()
-                            if (!it.artist.isNullOrEmpty()) currentArtist = it.artist.toString()
-                            if (it.artworkUri != null) currentCoverUrl = it.artworkUri.toString()
+                            currentTitle = it.title.toString()
+                            currentArtist = it.artist.toString()
+                            currentCoverUrl = it.artworkUri.toString()
+                            currentSong = Song(
+                                videoId = mediaItem.mediaId,
+                                title = currentTitle,
+                                artist = currentArtist,
+                                coverUrl = currentCoverUrl
+                            )
                         }
                         duration = mediaController?.duration?.toFloat()?.coerceAtLeast(1f) ?: 1f
                     }
@@ -71,11 +94,44 @@ class MusicViewModel : ViewModel() {
                 Log.e("MusicViewModel", "Errore init player: ${e.message}")
             }
         }, MoreExecutors.directExecutor())
+
+        fetchHomeContent()
     }
 
-    // --- RICERCA DINAMICA ---
+    fun fetchHomeContent() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            val json = repository.getHomeContent()
+            if (json != null) {
+                homeContent = SongParser.parseHomeContent(json)
+            } else {
+                Log.e("MusicViewModel", "Impossibile caricare i contenuti della Home.")
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun saveLoginCookie(cookie: String) {
+        viewModelScope.launch {
+            cookieManager.saveCookie(cookie)
+            YouTubeClient.currentCookie = cookie
+            isLoggedIn = true
+            fetchHomeContent()
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            cookieManager.clearCookie()
+            YouTubeClient.currentCookie = ""
+            isLoggedIn = false
+            searchResults.clear()
+            homeContent = emptyList()
+            fetchHomeContent()
+        }
+    }
+
     fun search(query: String) {
-        // 1. Cancella la ricerca precedente se l'utente sta ancora scrivendo
         searchJob?.cancel()
 
         if (query.isBlank()) {
@@ -85,18 +141,15 @@ class MusicViewModel : ViewModel() {
             return
         }
 
-        // 2. Avvia una nuova ricerca con ritardo (Debounce)
         searchJob = viewModelScope.launch {
-            delay(800) // Aspetta 800ms che l'utente finisca di scrivere
+            delay(800)
 
             isSearchingOnline = true
             searchError = null
-            searchResults.clear() // Pulisci i vecchi risultati mentre carichi
+            searchResults.clear()
 
             try {
-                Log.d("MusicViewModel", "Avvio ricerca per: $query")
                 val results = repository.searchSongs(query)
-
                 if (results.isNotEmpty()) {
                     searchResults.addAll(results)
                 } else {
@@ -106,29 +159,24 @@ class MusicViewModel : ViewModel() {
                 Log.e("MusicViewModel", "Errore ricerca: ${e.message}")
                 searchError = "Errore di connessione"
             } finally {
-                // 3. Importante: Spegni SEMPRE il caricamento, anche se c'è errore
                 isSearchingOnline = false
             }
         }
     }
 
-    // ... dentro MusicViewModel ...
-
     fun playSong(song: Song) {
-        // 1. Imposta subito i metadati visivi (così l'utente vede che hai cliccato)
         currentTitle = song.title
         currentArtist = song.artist
         currentCoverUrl = song.coverUrl
-        isBuffering = true // Mostra caricamento
+        currentSong = song
+        isBuffering = true
 
         viewModelScope.launch {
-            // 2. Chiedi a YouTube l'URL vero
             val streamUrl = repository.getStreamUrl(song.videoId)
 
             if (streamUrl != null) {
-                // 3. Se trovato, suona quello!
                 val item = MediaItem.Builder()
-                    .setUri(streamUrl) // URL REALE
+                    .setUri(streamUrl)
                     .setMediaId(song.videoId)
                     .setMediaMetadata(
                         MediaMetadata.Builder()
@@ -143,21 +191,26 @@ class MusicViewModel : ViewModel() {
                 mediaController?.prepare()
                 mediaController?.play()
             } else {
-                // Gestione Errore (es. canzone protetta/vevo)
                 Log.e("MusicViewModel", "Impossibile riprodurre: URL non trovato")
-                isBuffering = false // Togli caricamento
-                // Qui potresti mostrare un Toast "Errore riproduzione"
+                isBuffering = false
             }
         }
     }
 
     fun playTestTrack() {
         val testCoverUrl = "https://i.ytimg.com/vi/0h8Z-L0J-PA/maxresdefault.jpg"
+        val testTitle = "Jazz in Paris"
+        val testArtist = "Google Samples"
         val item = MediaItem.Builder()
             .setUri("https://storage.googleapis.com/exoplayer-test-media-0/Jazz_In_Paris.mp3")
-            .setMediaMetadata(MediaMetadata.Builder().setTitle("Jazz in Paris").setArtist("Google Samples").setArtworkUri(Uri.parse(testCoverUrl)).build())
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(testTitle).setArtist(testArtist).setArtworkUri(Uri.parse(testCoverUrl)).build())
             .build()
+
         currentCoverUrl = testCoverUrl
+        currentTitle = testTitle
+        currentArtist = testArtist
+        currentSong = Song(videoId = "test", title = testTitle, artist = testArtist, coverUrl = testCoverUrl)
+
         mediaController?.setMediaItem(item)
         mediaController?.prepare()
         mediaController?.play()

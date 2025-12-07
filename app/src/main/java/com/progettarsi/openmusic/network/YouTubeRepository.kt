@@ -1,6 +1,7 @@
 package com.progettarsi.openmusic.network
 
 import android.util.Log
+import com.google.gson.JsonObject
 import com.progettarsi.openmusic.model.Song
 import com.progettarsi.openmusic.model.SongParser
 import kotlinx.coroutines.Dispatchers
@@ -21,9 +22,22 @@ class YouTubeRepository {
         }
     }
 
+    suspend fun getHomeContent(): JsonObject? {
+        return withContext(Dispatchers.IO) {
+            try {
+                // FEwhat_to_listen è l'ID per la pagina "Home" personalizzata
+                val body = YouTubeClient.createBrowseBody("FEwhat_to_listen")
+                YouTubeClient.api.browse(YouTubeClient.API_KEY, body)
+            } catch (e: Exception) {
+                Log.e("YouTubeRepository", "Errore nel caricare la Home: ${e.message}")
+                null
+            }
+        }
+    }
+
     suspend fun getStreamUrl(videoId: String): String? {
         return withContext(Dispatchers.IO) {
-            // STRATEGIA OUTERTUNE: Prova a cascata
+            // Priorità iOS -> Android
             Log.d("YouTubeRepository", "Provo stream con client iOS...")
             var url = tryGetStream(videoId, isIos = true)
 
@@ -44,21 +58,22 @@ class YouTubeRepository {
             val response = YouTubeClient.api.player(YouTubeClient.API_KEY, body)
 
             val playability = response.getAsJsonObject("playabilityStatus")
-            if (playability?.get("status")?.asString != "OK") return null
+            if (playability?.get("status")?.asString != "OK") {
+                Log.e("YouTubeRepository", "Non riproducibile: ${playability?.get("status")?.asString}")
+                return null
+            }
 
             val streamingData = response.getAsJsonObject("streamingData") ?: return null
             val formats = streamingData.getAsJsonArray("adaptiveFormats") ?: return null
 
             for (element in formats) {
                 val obj = element.asJsonObject
-                val mime = obj.get("mimeType")?.asString ?: ""
-                // Cerchiamo audio con URL diretto (non cifrato)
-                if (mime.contains("audio") && obj.has("url")) {
+                if (obj.get("mimeType")?.asString?.contains("audio") == true && obj.has("url")) {
                     return obj.get("url").asString
                 }
             }
         } catch (e: Exception) {
-            Log.e("YouTubeRepository", "Errore: ${e.message}")
+            Log.e("YouTubeRepository", "Errore stream: ${e.message}")
         }
         return null
     }

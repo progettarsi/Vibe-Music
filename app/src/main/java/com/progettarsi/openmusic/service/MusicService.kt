@@ -1,13 +1,16 @@
 package com.progettarsi.openmusic.service
 
 import android.content.Intent
-import androidx.media3.common.Player
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
+// QUESTA ANNOTAZIONE RISOLVE L'ERRORE DI COMPILAZIONE
+@OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
@@ -16,17 +19,24 @@ class MusicService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
-        // TRUCCO OUTERTUNE: Usiamo un User-Agent generico che funziona bene con gli stream
+        // 1. Usiamo lo stesso User-Agent del Client (IMPORTANTE per non essere bloccati)
         val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36"
 
-        // Configuriamo il motore di rete di ExoPlayer
-        val httpDataSourceFactory = DefaultHttpDataSource.Factory()
+        // 2. CONFIGURAZIONE FONDAMENTALE: Aggiungiamo Referer e Origin
+        // Senza questi header, YouTube blocca lo stream audio (Errore 403 Forbidden)
+        val defaultHttpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(userAgent)
             .setAllowCrossProtocolRedirects(true)
+            .setDefaultRequestProperties(
+                mapOf(
+                    "Referer" to "https://music.youtube.com/",
+                    "Origin" to "https://music.youtube.com"
+                )
+            )
 
-        // Costruiamo il player con questa configurazione
+        // 3. Costruiamo il player usando questa configurazione di rete personalizzata
         player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(defaultHttpDataSourceFactory))
             .build()
 
         mediaSession = MediaSession.Builder(this, player).build()
