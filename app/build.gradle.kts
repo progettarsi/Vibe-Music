@@ -79,6 +79,7 @@ dependencies {
 
     // Swipe to Refresh
     implementation("com.google.accompanist:accompanist-swiperefresh:0.27.0")
+    implementation("ir.mahozad.multiplatform:wavy-slider:2.2.0")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

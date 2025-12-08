@@ -1,5 +1,7 @@
 package com.progettarsi.openmusic
 
+import android.annotation.SuppressLint
+import android.graphics.Paint
 import android.util.Log
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
@@ -24,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -38,6 +41,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -46,6 +50,11 @@ import com.progettarsi.openmusic.ui.theme.*
 import com.progettarsi.openmusic.viewmodel.MusicViewModel
 import kotlin.math.PI
 import kotlin.math.sin
+import ir.mahozad.multiplatform.wavyslider.material3.WavySlider as WavySlider3
+import ir.mahozad.multiplatform.wavyslider.material.WavySlider as WavySlider2
+import ir.mahozad.multiplatform.wavyslider.WaveDirection.*
+
+
 
 @Composable
 fun MusicPlayerScreen(
@@ -102,48 +111,54 @@ fun MusicPlayerScreen(
             if (coverUrl.isNotEmpty()) Log.d("MusicPlayerDebug", "URL Immagine: '$coverUrl'")
         }
 
-        if (coverUrl.isNotEmpty()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(coverUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .offset(y = (offsetY * 0.5f).dp) // Parallasse sullo sfondo
-                    .alpha(0.6f),
-                placeholder = fallbackPainter,
-                error = fallbackPainter,
-                fallback = fallbackPainter
-            )
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.DarkGray.copy(alpha = 0.3f))
-            )
+        Box(modifier = Modifier
+            .width(400.dp)
+            .height(400.dp)
+            .background(DarkBackground)
+        )
+        {
+            if (coverUrl.isNotEmpty()) {
+
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(coverUrl)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .offset(y = (offsetY * 0.5f).dp),
+                    placeholder = fallbackPainter,
+                    error = fallbackPainter,
+                    fallback = fallbackPainter
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Magenta)
+                )
+                {
+                    Icon(Icons.Default.Album, null, tint = Color.White.copy(0.6f), modifier = Modifier.fillMaxSize().align(Alignment.Center))
+                }
+            }
         }
 
         // SFUMATURE
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(DarkBackground.copy(0.9f), Color.Transparent))))
-            Spacer(Modifier.weight(1f))
-            Box(Modifier.fillMaxWidth().height(400.dp).background(Brush.verticalGradient(listOf(Color.Transparent, DarkBackground.copy(0.5f), DarkBackground))))
-        }
+        Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(DarkBackground.copy(1f), Color.Transparent))))
+        Box(Modifier.padding(top=280.dp).fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(Color.Transparent, DarkBackground))))
 
         // CONTENUTO
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .padding(horizontal = 24.dp)
+                .navigationBarsPadding()
+                .padding(horizontal = 32.dp)
                 .offset(y = offsetY.dp), // Il contenuto segue il dito
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.weight(1f))
-
+            Spacer(Modifier.height(350.dp))
+            
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(artist, color = TextGrey, fontSize = 16.sp, fontWeight = FontWeight.Medium)
@@ -157,12 +172,12 @@ fun MusicPlayerScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             Text("Testo della canzone in streaming...", color = TextGrey.copy(0.9f), fontSize = 18.sp, textAlign = TextAlign.Center)
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
             // BARRA + PLAY
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.weight(1f).height(60.dp), contentAlignment = Alignment.CenterStart) {
                     InteractiveSquigglyBar(
                         progress = effectiveProgress,
@@ -263,4 +278,13 @@ fun InteractiveSquigglyBar(
             Text(timeString, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.offset(x = offsetDp, y = (-10).dp).background(Color.Black.copy(0.7f), RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp))
         }
     }
+}
+
+
+val x: MusicViewModel = MusicViewModel()
+@Preview
+@Composable
+fun k()
+{
+    MusicPlayerScreen(x, onCollapse = {})
 }
