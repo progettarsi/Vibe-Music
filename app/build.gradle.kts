@@ -79,6 +79,11 @@ dependencies {
     // Swipe to Refresh
     implementation("com.google.accompanist:accompanist-swiperefresh:0.27.0")
     implementation("ir.mahozad.multiplatform:wavy-slider:2.1.0")
+    // Le forme funzionano solo se includi questa libreria grafica
+    implementation(libs.androidx.graphics.shapes)
+
+    // Material 3 (verrà presa la versione alpha definita nel toml)
+    implementation(libs.androidx.compose.material3)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -97,4 +102,10 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+    compilerOptions {
+        freeCompilerArgs.add("-opt-in=androidx.compose.material3.ExperimentalMaterial3Api")
+        freeCompilerArgs.add("-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
+    }
 }

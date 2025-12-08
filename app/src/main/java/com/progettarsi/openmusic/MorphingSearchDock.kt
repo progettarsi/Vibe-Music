@@ -1,5 +1,6 @@
 package com.progettarsi.openmusic
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
@@ -38,6 +39,7 @@ import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeChild
 
+@SuppressLint("UnusedBoxWithConstraintsScope")
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MorphingSearchDock(

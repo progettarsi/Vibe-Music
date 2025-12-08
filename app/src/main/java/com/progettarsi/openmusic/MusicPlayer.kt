@@ -1,27 +1,55 @@
 package com.progettarsi.openmusic
 
-import android.util.Log
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.AllInclusive
+import androidx.compose.material.icons.filled.Bedtime
+import androidx.compose.material.icons.filled.CellTower
+import androidx.compose.material.icons.filled.Downloading
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.rounded.ArrowBackIosNew
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.material3.toShape
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -29,21 +57,23 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.progettarsi.openmusic.ui.theme.*
+import com.progettarsi.openmusic.ui.component.ShapeProgressIndicator
+import com.progettarsi.openmusic.ui.theme.DarkBackground
+import com.progettarsi.openmusic.ui.theme.PurplePrimary
+import com.progettarsi.openmusic.ui.theme.SurfaceHighlight
+import com.progettarsi.openmusic.ui.theme.TextGrey
 import com.progettarsi.openmusic.viewmodel.MusicViewModel
-
-// --- IMPORTS WAVY SLIDER ---
 import ir.mahozad.multiplatform.wavyslider.WaveDirection
-import ir.mahozad.multiplatform.wavyslider.material3.WavySlider
+import ir.mahozad.multiplatform.wavyslider.material.WavySlider
 
 // 1. COMPONENTE STATEFUL (Connesso al ViewModel)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MusicPlayerScreen(
     musicViewModel: MusicViewModel,
@@ -91,6 +121,7 @@ fun MusicPlayerContent(
     var isLiked by remember { mutableStateOf(false) }
     var offsetY by remember { mutableFloatStateOf(0f) }
 
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -115,73 +146,108 @@ fun MusicPlayerContent(
     ) {
         val fallbackPainter = rememberVectorPainter(Icons.Default.Album)
 
-        // SFONDO (Copertina sfocata)
-        if (coverUrl.isNotEmpty()) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(coverUrl)
-                    .crossfade(true)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .offset(y = (offsetY * 0.5f).dp) // Effetto parallasse
-                    .alpha(0.6f),
-                placeholder = fallbackPainter,
-                error = fallbackPainter,
-                fallback = fallbackPainter
-            )
-        } else {
+        Column(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.DarkGray.copy(alpha = 0.3f))
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.5f)
             )
-        }
-
-        // SFUMATURE (Overlay scuro per leggibilità)
-        Column(modifier = Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(DarkBackground.copy(0.9f), Color.Transparent))))
-            Spacer(Modifier.weight(1f))
-            Box(Modifier.fillMaxWidth().height(400.dp).background(Brush.verticalGradient(listOf(Color.Transparent, DarkBackground.copy(0.5f), DarkBackground))))
-        }
-
-        // CONTENUTO PLAYER
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .padding(horizontal = 24.dp)
-                .offset(y = offsetY.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.weight(1f))
-
-            // TITOLO E ARTISTA
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(artist, color = TextGrey, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(title, color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Bold, lineHeight = 40.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            {
+                // SFONDO (Copertina sfocata)
+                if (coverUrl.isNotEmpty()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(coverUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopStart)
+                            .offset(y = (offsetY * 0.5f).dp),
+                        placeholder = fallbackPainter,
+                        error = fallbackPainter,
+                        fallback = fallbackPainter
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Magenta)
+                    ) { Icon(Icons.Default.Album, null, tint = Color.White.copy(0.6f), modifier = Modifier.fillMaxSize()) }
                 }
-                IconButton(onClick = { isLiked = !isLiked }) {
-                    AnimatedContent(targetState = isLiked, label = "Like") { liked ->
-                        Icon(if(liked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder, null, tint = if(liked) PurplePrimary else Color.White, modifier = Modifier.size(32.dp))
+                // SFUMATURE (Overlay scuro per leggibilità)
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxWidth().height(120.dp).background(Brush.verticalGradient(listOf(DarkBackground, Color.Transparent))))
+                    Box(Modifier.fillMaxWidth().height(240.dp).background(Brush.verticalGradient(listOf(Color.Transparent, DarkBackground))).align(Alignment.BottomEnd))
+                }
+
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal =24.dp)
+                ) {
+                    // TITOLO E ARTISTA
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                artist,
+                                color = Color.White.copy(0.8f),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                            Text(
+                                title,
+                                color = Color.White,
+                                fontSize = 36.sp,
+                                fontWeight = FontWeight.Bold,
+                                lineHeight = 40.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        IconButton(onClick = { isLiked = !isLiked }) {
+                            AnimatedContent(targetState = isLiked, label = "Like") { liked ->
+                                Icon(
+                                    if (liked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                                    null,
+                                    tint = if (liked) PurplePrimary else Color.White,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
-            // Placeholder per i testi (Lyrics)
-            Text("Testo della canzone in streaming...", color = TextGrey.copy(0.9f), fontSize = 18.sp, textAlign = TextAlign.Center)
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.fillMaxHeight(0.5f))
 
-            // --- WAVY SLIDER E CONTROLLI ---
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
 
+            // -- WAVY SLIDER E CONTROLLI ---
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Icon(
+                    Icons.Rounded.ArrowBackIosNew,
+                    null,
+                    tint = Color.White,
+                    modifier = Modifier.size(32.dp)
+                        .combinedClickable(onClick = {}, onDoubleClick = {}).clip(CircleShape)
+                )
                 // 1. Wavy Slider
-                Box(Modifier.weight(1f).height(60.dp), contentAlignment = Alignment.CenterStart) {
+                Box(
+                    Modifier.weight(1f).height(60.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
                     WavySlider(
                         value = effectiveProgress,
                         onValueChange = { scrubbingProgress = it },
@@ -190,47 +256,124 @@ fun MusicPlayerContent(
                             scrubbingProgress = null
                         },
                         // Configurazione Onda
-                        waveLength = 35.dp,
-                        waveHeight = 12.dp,
+                        waveLength = 26.dp,
+                        waveHeight = 11.dp,
                         // L'onda si muove solo se sta suonando e non è in buffering
-                        waveVelocity = if (isPlaying && !isBuffering) 14.dp to WaveDirection.HEAD else 0.dp to WaveDirection.HEAD,
-                        waveThickness = 4.dp,
-                        colors = SliderDefaults.colors(
-                            thumbColor = Color.White,
-                            activeTrackColor = PurplePrimary,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                        )
+                        waveVelocity = if (isPlaying && !isBuffering) 25.dp to WaveDirection.TAIL else 0.dp to WaveDirection.HEAD,
+                        waveThickness = 5.dp,
+                        trackThickness = 3.dp
                     )
                 }
 
                 // 2. Play/Pause Button
-                Box(contentAlignment = Alignment.Center) {
-                    if (isBuffering) {
-                        CircularProgressIndicator(modifier = Modifier.size(56.dp), color = Color.White, strokeWidth = 3.dp)
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(56.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // Importante: clip deve venire PRIMA del clickable per sagomare l'effetto tocco
+                            .clip(MaterialShapes.Cookie12Sided.toShape())
+                            .background(SurfaceHighlight)
+                            .clickable(onClick = onPlayPause)
+                    )
+
+                    // 2. L'ICONA (Al centro)
+                    AnimatedContent(targetState = isPlaying, label = "Play") { playing ->
+                        Icon(
+                            if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            null,
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
-                    IconButton(
-                        onClick = onPlayPause,
-                        modifier = Modifier.size(56.dp).background(Color.White.copy(0.1f), CircleShape)
+                    if (isBuffering) {
+                        ShapeProgressIndicator(
+                            modifier = Modifier.fillMaxSize(),
+                            shape = MaterialShapes.Cookie12Sided,
+                            color = Color.White.copy(0.7f),
+                            strokeWidth = 3.dp
+                        )
+                    }
+
+                }
+            }
+        }
+        // CONTROLLI EXTRA (Shuffle/Loop/Pulsante Coda)
+        Box(modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter).padding(24.dp)) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = {/*TODO*/}, modifier = Modifier.clip(RoundedCornerShape(100.dp)).size(50.dp).background(SurfaceHighlight)) {
+                        Icon(Icons.Filled.Bedtime, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                    }
+                    IconButton(onClick = {/*TODO*/}, modifier = Modifier.clip(RoundedCornerShape(100.dp)).size(50.dp).background(SurfaceHighlight)) {
+                        Icon(Icons.Filled.CellTower, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                    }
+                    IconButton(onClick = {/*TODO*/}, modifier = Modifier.clip(RoundedCornerShape(100.dp)).size(50.dp).background(SurfaceHighlight)) {
+                        Icon(Icons.Default.Downloading, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                    }
+                    IconButton(onClick = {/*TODO*/}, modifier = Modifier.clip(RoundedCornerShape(100.dp)).size(50.dp).background(SurfaceHighlight)) {
+                        Icon(Icons.Default.MoreVert, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(100.dp))
+                            .background(SurfaceHighlight)
+                            .height(50.dp)
+                            .width(200.dp)
+                            .padding(8.dp)
+                            .combinedClickable(onClick = {/*open QueueScreen*/ }),
+                        contentAlignment = Alignment.Center
                     ) {
-                        AnimatedContent(targetState = isPlaying, label = "Play") { playing ->
-                            Icon(if (playing) Icons.Rounded.Pause else Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(32.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Icon(
+                                Icons.AutoMirrored.Filled.QueueMusic,
+                                null,
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("From: ", color = Color.White, fontSize = 16.sp)
+                            Text(
+                                "Playlist Placeholder",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                maxLines = 1
+                            )
+
                         }
                     }
+                    IconButton(onClick = { isLoopOn = !isLoopOn }) {
+                        Icon(
+                            Icons.Default.AllInclusive,
+                            null,
+                            tint = if (isLoopOn) Color.White else TextGrey.copy(0.5f),
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    IconButton(onClick = { isShuffleOn = !isShuffleOn }) {
+                        Icon(
+                            Icons.Default.Shuffle,
+                            null,
+                            tint = if (isShuffleOn) Color.White else TextGrey.copy(0.5f),
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // CONTROLLI EXTRA (Shuffle/Loop)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                IconButton(onClick = { isLoopOn = !isLoopOn }) {
-                    Icon(Icons.Default.AllInclusive, null, tint = if(isLoopOn) Color.White else TextGrey.copy(0.5f), modifier = Modifier.size(32.dp))
-                }
-                IconButton(onClick = { isShuffleOn = !isShuffleOn }) {
-                    Icon(Icons.Default.Shuffle, null, tint = if(isShuffleOn) Color.White else TextGrey.copy(0.5f), modifier = Modifier.size(28.dp))
-                }
-            }
-            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
