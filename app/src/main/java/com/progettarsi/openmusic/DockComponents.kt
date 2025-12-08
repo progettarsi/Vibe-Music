@@ -41,9 +41,11 @@ fun MiniPlayerContent(
     musicViewModel: MusicViewModel,
     onPlayerClick: () -> Unit
 ) {
-    val title = musicViewModel.currentTitle
-    val artist = musicViewModel.currentArtist
-    val coverUrl = musicViewModel.currentCoverUrl
+    // MODIFICA QUI: Aggiungi esplicitamente ": String"
+    val title: String = musicViewModel.currentTitle
+    val artist: String = musicViewModel.currentArtist
+    val coverUrl: String = musicViewModel.currentCoverUrl
+
     val isPlaying = musicViewModel.isPlaying
     val isBuffering = musicViewModel.isBuffering
 
