@@ -1,6 +1,8 @@
 package com.progettarsi.openmusic
 
+import android.app.Activity
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -41,16 +43,14 @@ class MainActivity : ComponentActivity() {
                 val searchState = remember { SearchState() }
                 val playerState = remember { PlayerState() }
 
-                // 2. AUDIO ENGINE: Inizializza il ViewModel
+                // 2. AUDIO ENGINE
                 val musicViewModel: MusicViewModel = viewModel()
-
-                // 3. AUDIO ENGINE: Avvia il Service Audio all'avvio dell'app
                 val context = LocalContext.current
                 LaunchedEffect(Unit) {
                     musicViewModel.initPlayer(context)
                 }
 
-                // 4. Passa tutto alla UI principale
+                // 3. UI Principale
                 MainAppStructure(
                     searchState = searchState,
                     playerState = playerState,
@@ -65,18 +65,51 @@ class MainActivity : ComponentActivity() {
 fun MainAppStructure(
     searchState: SearchState,
     playerState: PlayerState,
-    musicViewModel: MusicViewModel // Riceve il ViewModel
+    musicViewModel: MusicViewModel
 ) {
     val navController = rememberNavController()
     val hazeState = remember { HazeState() }
+    val context = LocalContext.current
 
     // Stato Profilo
     var isProfileOpen by remember { mutableStateOf(false) }
 
-    // Back Handler per chiudere il profilo
+    // --- GESTIONE TASTO INDIETRO (Priority Stack) ---
+    // In Compose, vince l'ultimo BackHandler attivo.
+    // Quindi mettiamo quello generico "Esci dall'app" per PRIMO (priorità più bassa),
+    // e quelli specifici (chiudi profilo, ecc.) DOPO (priorità più alta).
+
+    // 0. LIVELLO BASE: Doppio click per uscire
+    var lastBackPressTime by remember { mutableLongStateOf(0L) }
+
+    BackHandler(enabled = true) {
+        val currentTime = System.currentTimeMillis()
+        if (currentTime - lastBackPressTime < 2000) {
+            // Se sono passati meno di 2 secondi dall'ultimo click, esci
+            (context as? Activity)?.finish()
+        } else {
+            // Primo click: aggiorna tempo e mostra messaggio
+            lastBackPressTime = currentTime
+            Toast.makeText(context, "Press back again to exit", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 1. Se il PROFILO è aperto, chiudilo (Sovrascrive il livello base)
     BackHandler(enabled = isProfileOpen) {
         isProfileOpen = false
     }
+
+    // 2. Se il PLAYER è aperto, chiudilo (minimizzalo)
+    BackHandler(enabled = playerState.isPlayerOpen) {
+        playerState.isPlayerOpen = false
+    }
+
+    // 3. Se la RICERCA è aperta (espansa), chiudila
+    BackHandler(enabled = searchState.isSearching) {
+        searchState.isSearching = false
+    }
+
+    // -----------------------------------------------
 
     // --- ANIMAZIONI ---
     val searchTransition = updateTransition(targetState = searchState.isSearching, label = "Search")
@@ -134,7 +167,6 @@ fun MainAppStructure(
                         )
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                             searchState.isSearching = false
-                            searchState.query = ""
                         }
                 )
             }
@@ -150,12 +182,12 @@ fun MainAppStructure(
                 )
             }
 
-            // LIVELLO 4: SUPER DOCK (Con Audio Engine)
+            // LIVELLO 4: SUPER DOCK
             MorphingSearchDock(
                 searchState = searchState,
                 playerState = playerState,
                 isProfileOpen = isProfileOpen,
-                musicViewModel = musicViewModel, // <--- PASSIAMO IL MOTORE AUDIO QUI
+                musicViewModel = musicViewModel,
                 hazeState = hazeState,
                 searchProgress = searchProgress,
                 playerProgress = playerProgress,

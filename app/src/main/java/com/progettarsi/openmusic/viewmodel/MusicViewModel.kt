@@ -16,22 +16,24 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.MoreExecutors
 import com.progettarsi.openmusic.model.Song
 import com.progettarsi.openmusic.model.SongParser
 import com.progettarsi.openmusic.network.YouTubeClient
 import com.progettarsi.openmusic.network.YouTubeRepository
 import com.progettarsi.openmusic.service.MusicService
 import com.progettarsi.openmusic.utils.CookieManager
-import com.google.common.util.concurrent.MoreExecutors
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MusicViewModel : ViewModel() {
     private val repository = YouTubeRepository()
     private var searchJob: Job? = null
+    private var progressJob: Job? = null // Job specifico per la barra di avanzamento
 
     // Gestione Cookie e Stato Login
     private lateinit var cookieManager: CookieManager
@@ -71,25 +73,7 @@ class MusicViewModel : ViewModel() {
         controllerFuture.addListener({
             try {
                 mediaController = controllerFuture.get()
-                mediaController?.addListener(object : Player.Listener {
-                    override fun onIsPlayingChanged(playing: Boolean) { isPlaying = playing }
-                    override fun onPlaybackStateChanged(playbackState: Int) { isBuffering = (playbackState == Player.STATE_BUFFERING) }
-                    override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                        mediaItem?.mediaMetadata?.let {
-                            currentTitle = it.title.toString()
-                            currentArtist = it.artist.toString()
-                            currentCoverUrl = it.artworkUri.toString()
-                            currentSong = Song(
-                                videoId = mediaItem.mediaId,
-                                title = currentTitle,
-                                artist = currentArtist,
-                                coverUrl = currentCoverUrl
-                            )
-                        }
-                        duration = mediaController?.duration?.toFloat()?.coerceAtLeast(1f) ?: 1f
-                    }
-                })
-                startProgressUpdater()
+                setupPlayerListeners()
             } catch (e: Exception) {
                 Log.e("MusicViewModel", "Errore init player: ${e.message}")
             }
@@ -98,16 +82,100 @@ class MusicViewModel : ViewModel() {
         fetchHomeContent()
     }
 
+    private fun setupPlayerListeners() {
+        mediaController?.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+                if (playing) {
+                    startProgressUpdater()
+                } else {
+                    stopProgressUpdater()
+                }
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                isBuffering = (playbackState == Player.STATE_BUFFERING)
+                // Se finisce la canzone o si ferma, aggiorniamo lo stato finale
+                if (playbackState == Player.STATE_ENDED) {
+                    isPlaying = false
+                    progress = 0f
+                }
+            }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                mediaItem?.mediaMetadata?.let {
+                    currentTitle = it.title.toString()
+                    currentArtist = it.artist.toString()
+                    currentCoverUrl = it.artworkUri.toString()
+
+                    // Aggiorniamo anche l'oggetto Song corrente per coerenza UI
+                    if (mediaItem.mediaId != "test") {
+                        currentSong = Song(
+                            videoId = mediaItem.mediaId,
+                            title = currentTitle,
+                            artist = currentArtist,
+                            coverUrl = currentCoverUrl
+                        )
+                    }
+                }
+                updateDuration()
+            }
+        })
+    }
+
+    // --- LOGICA DI UPDATE PROGRESSO OTTIMIZZATA ---
+
+    private fun startProgressUpdater() {
+        // Cancella eventuali job precedenti per evitare duplicati
+        stopProgressUpdater()
+
+        progressJob = viewModelScope.launch {
+            while (isActive && isPlaying) {
+                mediaController?.let { controller ->
+                    val currentPos = controller.currentPosition.toFloat()
+                    val totalDur = controller.duration.toFloat()
+
+                    if (totalDur > 0) {
+                        duration = totalDur
+                        progress = (currentPos / totalDur).coerceIn(0f, 1f)
+                    }
+                }
+                // Aggiorniamo ogni secondo invece di 500ms, risparmia batteria
+                // e l'occhio umano su una barra piccola non nota la differenza
+                delay(1000)
+            }
+        }
+    }
+
+    private fun stopProgressUpdater() {
+        progressJob?.cancel()
+        progressJob = null
+    }
+
+    private fun updateDuration() {
+        mediaController?.let {
+            val totalDur = it.duration.toFloat()
+            if (totalDur > 0) duration = totalDur
+        }
+    }
+
+    // ---------------------------------------------
+
     fun fetchHomeContent() {
         viewModelScope.launch {
             _isLoading.value = true
-            val json = repository.getHomeContent()
-            if (json != null) {
-                homeContent = SongParser.parseHomeContent(json)
-            } else {
-                Log.e("MusicViewModel", "Impossibile caricare i contenuti della Home.")
+            try {
+                val json = repository.getHomeContent()
+                if (json != null) {
+                    homeContent = SongParser.parseHomeContent(json)
+                } else {
+                    Log.e("MusicViewModel", "Home content vuoto o nullo")
+                }
+            } catch (e: Exception) {
+                Log.e("MusicViewModel", "Errore fetch Home: ${e.message}")
+            } finally {
+                _isLoading.value = false
             }
-            _isLoading.value = false
         }
     }
 
@@ -142,7 +210,7 @@ class MusicViewModel : ViewModel() {
         }
 
         searchJob = viewModelScope.launch {
-            delay(800)
+            delay(800) // Debounce per non cercare mentre scrivi
 
             isSearchingOnline = true
             searchError = null
@@ -165,6 +233,7 @@ class MusicViewModel : ViewModel() {
     }
 
     fun playSong(song: Song) {
+        // UI Optimistic update: mostriamo subito i dati prima che carichi l'audio
         currentTitle = song.title
         currentArtist = song.artist
         currentCoverUrl = song.coverUrl
@@ -187,12 +256,15 @@ class MusicViewModel : ViewModel() {
                     )
                     .build()
 
-                mediaController?.setMediaItem(item)
-                mediaController?.prepare()
-                mediaController?.play()
+                mediaController?.let {
+                    it.setMediaItem(item)
+                    it.prepare()
+                    it.play()
+                }
             } else {
                 Log.e("MusicViewModel", "Impossibile riprodurre: URL non trovato")
                 isBuffering = false
+                // Qui potresti aggiungere uno stato di errore visibile all'utente
             }
         }
     }
@@ -201,36 +273,40 @@ class MusicViewModel : ViewModel() {
         val testCoverUrl = "https://i.ytimg.com/vi/0h8Z-L0J-PA/maxresdefault.jpg"
         val testTitle = "Jazz in Paris"
         val testArtist = "Google Samples"
-        val item = MediaItem.Builder()
-            .setUri("https://storage.googleapis.com/exoplayer-test-media-0/Jazz_In_Paris.mp3")
-            .setMediaMetadata(MediaMetadata.Builder().setTitle(testTitle).setArtist(testArtist).setArtworkUri(Uri.parse(testCoverUrl)).build())
-            .build()
 
         currentCoverUrl = testCoverUrl
         currentTitle = testTitle
         currentArtist = testArtist
         currentSong = Song(videoId = "test", title = testTitle, artist = testArtist, coverUrl = testCoverUrl)
 
-        mediaController?.setMediaItem(item)
-        mediaController?.prepare()
-        mediaController?.play()
-    }
+        val item = MediaItem.Builder()
+            .setUri("https://storage.googleapis.com/exoplayer-test-media-0/Jazz_In_Paris.mp3")
+            .setMediaId("test")
+            .setMediaMetadata(MediaMetadata.Builder().setTitle(testTitle).setArtist(testArtist).setArtworkUri(Uri.parse(testCoverUrl)).build())
+            .build()
 
-    fun togglePlayPause() { if (isPlaying) mediaController?.pause() else mediaController?.play() }
-    fun seekTo(value: Float) { mediaController?.seekTo((value * duration).toLong()) }
-
-    private fun startProgressUpdater() {
-        viewModelScope.launch {
-            while (true) {
-                if (mediaController != null) {
-                    val currentPos = mediaController!!.currentPosition.toFloat()
-                    val totalDur = mediaController!!.duration.toFloat()
-                    if (totalDur > 0) { duration = totalDur; progress = currentPos / totalDur }
-                }
-                delay(500)
-            }
+        mediaController?.let {
+            it.setMediaItem(item)
+            it.prepare()
+            it.play()
         }
     }
 
-    override fun onCleared() { mediaController?.release(); super.onCleared() }
+    fun togglePlayPause() {
+        if (isPlaying) mediaController?.pause() else mediaController?.play()
+    }
+
+    fun seekTo(value: Float) {
+        mediaController?.let {
+            it.seekTo((value * duration).toLong())
+            // Aggiorniamo subito la progress bar visiva per feedback immediato
+            progress = value
+        }
+    }
+
+    override fun onCleared() {
+        stopProgressUpdater()
+        mediaController?.release()
+        super.onCleared()
+    }
 }

@@ -107,7 +107,7 @@ fun ProfileScreenContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Tasto Indietro (Chiude il profilo)
-            SimulatedGlassButton(Icons.Default.ArrowBack, profileHazeState, onClose)
+            SimulatedGlassButton(Icons.Default.Close, profileHazeState, onClose)
 
             // Tasto Login/Settings
             SimulatedGlassButton(if (isLoggedIn) Icons.Outlined.Settings else Icons.Default.Login, profileHazeState) { if (!isLoggedIn) showLoginDialog = true }
