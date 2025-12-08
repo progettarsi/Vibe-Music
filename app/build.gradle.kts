@@ -9,9 +9,7 @@ plugins {
 
 android {
     namespace = "com.progettarsi.openmusic"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.progettarsi.openmusic"
@@ -59,6 +57,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.ui.text)
+    implementation(platform(libs.androidx.compose.bom))
     // --- MEDIA 3 (AUDIO ENGINE) ---
     val media3Version = "1.2.0" // O versione più recente
     implementation("androidx.media3:media3-exoplayer:$media3Version")
@@ -79,7 +78,7 @@ dependencies {
 
     // Swipe to Refresh
     implementation("com.google.accompanist:accompanist-swiperefresh:0.27.0")
-    implementation("ir.mahozad.multiplatform:wavy-slider:2.2.0")
+    implementation("ir.mahozad.multiplatform:wavy-slider:2.1.0")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
