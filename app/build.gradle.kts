@@ -6,10 +6,12 @@ import java.io.FileInputStream
 // Use the "alias" syntax for plugins from libs.versions.toml
 // and apply false to make them available to subprojects.
 plugins {
-    alias(libs.plugins.android.application) apply false
-    alias(libs.plugins.kotlin.android) apply false
-    alias(libs.plugins.kotlin.compose) apply false
-    alias(libs.plugins.ksp) apply false
+    // WRONG: alias(libs.plugins.android.application) apply false
+    // CORRECT:
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 
