@@ -18,6 +18,8 @@ espressoCore = "3.6.1"
 
 # Compose BOM (Gestisce tutte le versioni UI)
 composeBom = "2024.06.00"
+foundation = "1.10.0"
+benchmarkTraceprocessor = "1.4.1"
 
 [libraries]
 # Core Android
@@ -48,6 +50,8 @@ androidx-compose-foundation = { group = "androidx.compose.foundation", name = "f
 androidx-compose-animation = { group = "androidx.compose.animation", name = "animation" }
 androidx-compose-animation-core = { group = "androidx.compose.animation", name = "animation-core" }
 androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text" }
+androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
+androidx-benchmark-traceprocessor = { group = "androidx.benchmark", name = "benchmark-traceprocessor", version.ref = "benchmarkTraceprocessor" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

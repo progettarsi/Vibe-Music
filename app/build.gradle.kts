@@ -8,7 +8,7 @@ plugins {
 }
 
 android {
-    namespace = "com.progettarsi.openmusic"
+    namespace = "com.progettarsi.vibemusic"
     compileSdk = 36
 
     defaultConfig {
@@ -58,6 +58,8 @@ dependencies {
     implementation(libs.androidx.compose.animation)
     implementation(libs.androidx.compose.ui.text)
     implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.foundation)
+    implementation(libs.androidx.benchmark.traceprocessor)
     // --- MEDIA 3 (AUDIO ENGINE) ---
     val media3Version = "1.2.0" // O versione più recente
     implementation("androidx.media3:media3-exoplayer:$media3Version")
@@ -78,7 +80,7 @@ dependencies {
 
     // Swipe to Refresh
     implementation("com.google.accompanist:accompanist-swiperefresh:0.27.0")
-    implementation("ir.mahozad.multiplatform:wavy-slider:2.1.0")
+    implementation("ir.mahozad.multiplatform:wavy-slider:2.2.0")
     // Le forme funzionano solo se includi questa libreria grafica
     implementation(libs.androidx.graphics.shapes)
 
