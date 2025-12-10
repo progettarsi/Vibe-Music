@@ -34,6 +34,8 @@ import com.progettarsi.vibemusic.model.Song
 import com.progettarsi.vibemusic.ui.theme.PurplePrimary
 import com.progettarsi.vibemusic.ui.theme.TextGrey
 import com.progettarsi.vibemusic.viewmodel.MusicViewModel
+import androidx.compose.ui.res.stringResource
+import com.progettarsi.vibemusic.R
 import com.progettarsi.vibemusic.viewmodel.SearchViewModel // Importante
 
 // --- MINI PLAYER VIEW ---
@@ -95,8 +97,19 @@ fun MiniPlayerContent(
         Spacer(Modifier.width(12.dp))
 
         Column(verticalArrangement = Arrangement.Center) {
-            Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
-            Text(artist, color = Color.White.copy(0.7f), fontSize = 12.sp, maxLines = 1)
+            Text(
+                text = if (musicViewModel.currentTitle.isEmpty()) stringResource(R.string.no_track_title) else musicViewModel.currentTitle,
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                maxLines = 1
+            )
+            Text(
+                text = if (musicViewModel.currentTitle.isEmpty()) stringResource(R.string.no_track_artist) else musicViewModel.currentArtist,
+                color = Color.White.copy(0.7f),
+                fontSize = 12.sp,
+                maxLines = 1
+            )
         }
     }
 }

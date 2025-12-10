@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="search_placeholder_3">Something on mind?</string>
+    <string name="search_no_results">No results</string>
+    <string name="no_track_title">No Track</string>
+    <string name="search_error_connection">Connection Error</string>
+    <string name="profile_hours_played">hours played</string>
+    <string name="search_placeholder_1">Search for Artists</string>
+    <string name="search_placeholder_2">Start Typing to Search</string>
+    <string name="no_track_artist">Search Songs!</string>
+</resources>

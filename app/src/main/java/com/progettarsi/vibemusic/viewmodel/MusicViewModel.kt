@@ -39,7 +39,7 @@ class MusicViewModel : ViewModel() {
     // --- STATI PLAYER ---
     var isPlaying by mutableStateOf(false)
     var isBuffering by mutableStateOf(false)
-    var currentTitle by mutableStateOf("Nessuna Traccia")
+    var currentTitle by mutableStateOf("")
     var currentArtist by mutableStateOf("Cerca una canzone...")
     var currentCoverUrl by mutableStateOf("")
     var progress by mutableFloatStateOf(0f)

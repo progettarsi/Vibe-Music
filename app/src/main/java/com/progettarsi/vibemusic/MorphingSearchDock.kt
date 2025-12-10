@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp as lerpColor // Alias per evitare conflitti
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -90,7 +91,14 @@ fun MorphingSearchDock(
         HazeStyle(backgroundColor = DarkBackground, tint = HazeTint(Color.Black.copy(alpha = 0.2f)), blurRadius = 24.dp)
     }
 
-    val placeholders = remember { listOf("Cerca artisti...", "Digita per cercare...", "Cosa vuoi ascoltare?") }
+    val context = LocalContext.current
+    val placeholders = remember {
+        listOf(
+            context.getString(R.string.search_placeholder_1),
+            context.getString(R.string.search_placeholder_2),
+            context.getString(R.string.search_placeholder_3)
+        )
+    }
     var currentPlaceholder by remember { mutableStateOf(placeholders.first()) }
 
     LaunchedEffect(searchState.isSearching) {

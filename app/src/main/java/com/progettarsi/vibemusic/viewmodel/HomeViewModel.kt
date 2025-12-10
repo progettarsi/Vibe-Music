@@ -2,15 +2,16 @@ package com.progettarsi.vibemusic.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.progettarsi.vibemusic.model.SongParser
+import com.progettarsi.vibemusic.model.MusicItem
 import com.progettarsi.vibemusic.network.YouTubeRepository
+import com.progettarsi.vibemusic.utils.Resource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-// Stato della UI tipizzato: molto più pulito di avere variabili separate
 sealed interface HomeUiState {
     data object Loading : HomeUiState
+    // CORREZIONE: Ora usa List<MusicItem> invece di List<Any>
     data class Success(val data: List<Any>) : HomeUiState
     data class Error(val message: String) : HomeUiState
 }
@@ -28,16 +29,24 @@ class HomeViewModel : ViewModel() {
     fun fetchHomeContent() {
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
-            try {
-                val json = repository.getHomeContent()
-                if (json != null) {
-                    val parsed = SongParser.parseHomeContent(json)
-                    _uiState.value = HomeUiState.Success(parsed)
-                } else {
-                    _uiState.value = HomeUiState.Error("Impossibile caricare la home")
+
+            // Resource<List<MusicItem>>
+            val result = repository.getHomeContent()
+
+            _uiState.value = when (result) {
+                // Il cast <*> dice a Kotlin di fidarsi del tipo generico
+                is Resource.Success<*> -> {
+                    // Siccome result.data è List<MusicItem>, il cast è sicuro
+                    @Suppress("UNCHECKED_CAST")
+                    val items = result.data as? List<MusicItem> ?: emptyList()
+                    HomeUiState.Success(items)
                 }
-            } catch (e: Exception) {
-                _uiState.value = HomeUiState.Error(e.message ?: "Errore sconosciuto")
+                is Resource.Error<*> -> {
+                    HomeUiState.Error(result.message ?: "Errore sconosciuto")
+                }
+                is Resource.Loading<*> -> {
+                    HomeUiState.Loading
+                }
             }
         }
     }

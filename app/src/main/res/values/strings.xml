@@ -1,3 +1,16 @@
 <resources>
-    <string name="app_name">VibeMusic</string>
+    <string name="app_name" translatable="false">VibeMusic</string>
+
+    <string name="no_track_title">Nessuna Traccia</string>
+    <string name="no_track_artist">Cerca una canzone...</string>
+
+    <string name="search_placeholder_1">Cerca artisti...</string>
+    <string name="search_placeholder_2">Digita per cercare...</string>
+    <string name="search_placeholder_3">Cosa vuoi ascoltare?</string>
+    <string name="search_no_results">Nessun risultato</string>
+    <string name="search_error_connection">Errore connessione</string>
+    <string name="profile_hours_played">ore ascoltate</string>
+    <string name="profile_local_stats" translatable="false">Local stats only</string>
+    <string name="profile_login" translatable="false">Log In</string>
+    <string name="profile_logout" translatable="false">Log Out</string>
 </resources>

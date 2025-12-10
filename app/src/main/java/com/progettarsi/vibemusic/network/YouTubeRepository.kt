@@ -1,19 +1,23 @@
 package com.progettarsi.vibemusic.network
 
-import android.util.Log
 import com.google.gson.JsonObject
+import com.progettarsi.vibemusic.model.MusicItem
 import com.progettarsi.vibemusic.model.Song
 import com.progettarsi.vibemusic.model.SongParser
+import com.progettarsi.vibemusic.utils.Resource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 
 class YouTubeRepository {
 
+    // --- 1. RICERCA (Usa client WEB_REMIX) ---
     suspend fun searchSongs(query: String): List<Song> {
         return withContext(Dispatchers.IO) {
             try {
+                val headers = YouTubeClient.getClientHeaders(YouTubeClient.ClientType.WEB_REMIX)
                 val body = YouTubeClient.createSearchBody(query)
-                val response = YouTubeClient.api.search(YouTubeClient.API_KEY, body)
+                val response = YouTubeClient.api.search(YouTubeClient.API_KEY, headers, body)
                 SongParser.parseSearchResults(response)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -22,34 +26,40 @@ class YouTubeRepository {
         }
     }
 
-    suspend fun getHomeContent(): JsonObject? {
+    // --- 2. HOME (Usa client WEB_REMIX) ---
+    suspend fun getHomeContent(): Resource<List<MusicItem>> {
         return withContext(Dispatchers.IO) {
             try {
-                // --- LOGICA SMART ---
-                // Se c'è il cookie -> Home Personale ("FEwhat_to_listen")
-                // Se NON c'è cookie -> Classifiche ("FEmusic_charts")
-                // NOTA: "FEmusic_explore" era vuoto perché usa layout a griglia non supportati dal parser.
-                // "FEmusic_charts" invece usa le liste (Shelves) che il parser già riconosce!
                 val browseId = if (YouTubeClient.currentCookie.isNotEmpty()) "FEwhat_to_listen" else "FEmusic_new_releases"
 
-                Log.d("YouTubeRepository", "Caricamento Home con ID: $browseId")
-
+                val headers = YouTubeClient.getClientHeaders(YouTubeClient.ClientType.WEB_REMIX)
                 val body = YouTubeClient.createBrowseBody(browseId)
-                YouTubeClient.api.browse(YouTubeClient.API_KEY, body)
+
+                val response = YouTubeClient.api.browse(YouTubeClient.API_KEY, headers, body)
+
+                val parsedData = SongParser.parseHomeContent(response)
+
+                if (parsedData.isNotEmpty()) {
+                    Resource.Success(parsedData)
+                } else {
+                    Resource.Error("Nessun contenuto trovato")
+                }
+            } catch (e: IOException) {
+                Resource.Error("Errore di connessione")
             } catch (e: Exception) {
-                Log.e("YouTubeRepository", "Errore nel caricare la Home: ${e.message}")
-                null
+                Resource.Error("Errore: ${e.message}")
             }
         }
     }
 
+    // --- 3. STREAM AUDIO (Usa client IOS/ANDROID) ---
     suspend fun getStreamUrl(videoId: String): String? {
         return withContext(Dispatchers.IO) {
-            Log.d("YouTubeRepository", "Provo stream con client iOS...")
+            // Tentativo 1: iOS (Spesso migliore qualità/affidabilità)
             var url = tryGetStream(videoId, isIos = true)
 
+            // Tentativo 2: Android (Fallback)
             if (url == null) {
-                Log.w("YouTubeRepository", "iOS fallito, provo Android...")
                 url = tryGetStream(videoId, isIos = false)
             }
             url
@@ -58,10 +68,18 @@ class YouTubeRepository {
 
     private suspend fun tryGetStream(videoId: String, isIos: Boolean): String? {
         try {
-            val body = if (isIos) YouTubeClient.createIosPlayerBody(videoId)
-            else YouTubeClient.createAndroidPlayerBody(videoId)
+            val body: JsonObject
+            val headers: Map<String, String>
 
-            val response = YouTubeClient.api.player(YouTubeClient.API_KEY, body)
+            if (isIos) {
+                body = YouTubeClient.createIosPlayerBody(videoId)
+                headers = YouTubeClient.getClientHeaders(YouTubeClient.ClientType.IOS)
+            } else {
+                body = YouTubeClient.createAndroidPlayerBody(videoId)
+                headers = YouTubeClient.getClientHeaders(YouTubeClient.ClientType.ANDROID)
+            }
+
+            val response = YouTubeClient.api.player(YouTubeClient.API_KEY, headers, body)
 
             val playability = response.getAsJsonObject("playabilityStatus")
             if (playability?.get("status")?.asString != "OK") {
@@ -78,7 +96,7 @@ class YouTubeRepository {
                 }
             }
         } catch (e: Exception) {
-            // Ignora errore
+            e.printStackTrace()
         }
         return null
     }

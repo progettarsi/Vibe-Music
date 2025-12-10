@@ -153,11 +153,28 @@ object SongParser {
             ?.getAsJsonObject("text")?.getAsJsonArray("runs")?.get(0)?.asJsonObject?.get("text")?.asString
     }
 
+    // In SongParser.kt
+
     private fun extractSubtitle(renderer: JsonObject, index: Int): String {
         val flexColumns = renderer.getAsJsonArray("flexColumns") ?: return ""
         if (index >= flexColumns.size()) return ""
-        val runs = flexColumns.get(index)?.asJsonObject?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
+
+        val runs = flexColumns.get(index)?.asJsonObject
+            ?.getAsJsonObject("musicResponsiveListItemFlexColumnRenderer")
             ?.getAsJsonObject("text")?.getAsJsonArray("runs")
-        return runs?.firstOrNull()?.asJsonObject?.get("text")?.asString ?: ""
+
+        // --- MODIFICA QUI ---
+
+        // PRIMA: Prendevi solo il primo elemento ("Brano")
+        // return runs?.firstOrNull()?.asJsonObject?.get("text")?.asString ?: ""
+
+        // ORA: Uniamo tutti i pezzi ("Brano • Artista • Album")
+        val fullText = runs?.joinToString("") { it.asJsonObject.get("text").asString } ?: ""
+
+        // (OPZIONALE) PULIZIA: Rimuoviamo "Brano • " per lasciare solo l'artista pulito
+        return fullText
+            .replace("Brano • ", "")
+            .replace("Video • ", "")
+            .replace("Song • ", "") // Caso inglese
     }
 }

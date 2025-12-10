@@ -124,7 +124,7 @@ fun HomeScreenContent(
                         ) {
                             androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Text(
-                                    "Errore: ${uiState.message}",
+                                    "${uiState.message}",
                                     color = Color.Red,
                                     modifier = Modifier.padding(16.dp)
                                 )

@@ -1,11 +1,17 @@
 import java.util.Properties
 import java.io.FileInputStream
 
+// C:/Users/progettarsi/Documents/OpenMusic/build.gradle.kts
+
+// Use the "alias" syntax for plugins from libs.versions.toml
+// and apply false to make them available to subprojects.
 plugins {
-    alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.android.application) apply false
+    alias(libs.plugins.kotlin.android) apply false
+    alias(libs.plugins.kotlin.compose) apply false
+    alias(libs.plugins.ksp) apply false
 }
+
 
 android {
     namespace = "com.progettarsi.vibemusic"
@@ -42,16 +48,17 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
     buildFeatures {
         compose = true
-        buildConfig = true // <--- ABILITA QUESTO (Fondamentale)
+        buildConfig = true // <--- ABILITA Q    UESTO (Fondamentale)
     }
 }
 
 dependencies {
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    ksp("androidx.room:room-compiler:$roomVersion")
     // Per caricare immagini (AsyncImage) - Fondamentale per le copertine
     implementation("io.coil-kt:coil-compose:2.5.0")
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
