@@ -8,17 +8,17 @@ graphicsShapes = "1.1.0"
 
 
 # Android Core (Versioni stabili)
-coreKtx = "1.13.1"
-lifecycleRuntimeKtx = "2.8.7"
-activityCompose = "1.9.0"
+coreKtx = "1.17.0"
+lifecycleRuntimeKtx = "2.10.0"
+activityCompose = "1.12.1"
 
 # Testing
 junit = "4.13.2"
-junitVersion = "1.2.1"
-espressoCore = "3.6.1"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
 
 # Compose BOM (Gestisce tutte le versioni UI)
-composeBom = "2024.06.00"
+composeBom = "2025.12.00"
 foundation = "1.10.0"
 benchmarkTraceprocessor = "1.4.1"
 
