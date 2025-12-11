@@ -55,12 +55,13 @@ class YouTubeRepository {
     // --- 3. STREAM AUDIO (Usa client IOS/ANDROID) ---
     suspend fun getStreamUrl(videoId: String): String? {
         return withContext(Dispatchers.IO) {
-            // Tentativo 1: iOS (Spesso migliore qualità/affidabilità)
-            var url = tryGetStream(videoId, isIos = true)
+            // CAMBIAMENTO QUI: Proviamo prima ANDROID (isIos = false)
+            // È più affidabile per la riproduzione su dispositivi Android reali
+            var url = tryGetStream(videoId, isIos = false)
 
-            // Tentativo 2: Android (Fallback)
+            // Fallback su iOS se Android fallisce
             if (url == null) {
-                url = tryGetStream(videoId, isIos = false)
+                url = tryGetStream(videoId, isIos = true)
             }
             url
         }
@@ -69,15 +70,20 @@ class YouTubeRepository {
     private suspend fun tryGetStream(videoId: String, isIos: Boolean): String? {
         try {
             val body: JsonObject
-            val headers: Map<String, String>
+            // MODIFICA 1: Definiamo la variabile come MutableMap
+            val headers: MutableMap<String, String>
 
             if (isIos) {
                 body = YouTubeClient.createIosPlayerBody(videoId)
-                headers = YouTubeClient.getClientHeaders(YouTubeClient.ClientType.IOS)
+                // MODIFICA 2: Usiamo .toMutableMap() per renderla modificabile
+                headers = YouTubeClient.getClientHeaders(YouTubeClient.ClientType.IOS).toMutableMap()
             } else {
                 body = YouTubeClient.createAndroidPlayerBody(videoId)
-                headers = YouTubeClient.getClientHeaders(YouTubeClient.ClientType.ANDROID)
+                headers = YouTubeClient.getClientHeaders(YouTubeClient.ClientType.ANDROID).toMutableMap()
             }
+
+            // MODIFICA 3: Ora questo funziona perché la mappa è mutabile
+            headers["X-Anonymous"] = "true"
 
             val response = YouTubeClient.api.player(YouTubeClient.API_KEY, headers, body)
 

@@ -65,16 +65,33 @@ object YouTubeClient {
 
     // --- INTERCEPTOR: SOLO AUTH ---
     // Questo si occupa solo di aggiungere Cookie e Firma di sicurezza
+    // --- INTERCEPTOR: SOLO AUTH ---
+    // Questo si occupa di aggiungere Cookie e Firma di sicurezza,
+    // MA li ignora se viene richiesto l'accesso anonimo (per lo stream audio).
     private val authInterceptor = Interceptor { chain ->
-        val builder = chain.request().newBuilder()
+        val request = chain.request()
+        val builder = request.newBuilder()
 
-        if (currentCookie.isNotBlank()) {
+        // 1. CONTROLLO SPECIALE: Verifichiamo se è stato richiesto l'accesso anonimo
+        // Questo flag viene aggiunto dal Repository quando chiediamo lo stream audio.
+        val isAnonymous = request.header("X-Anonymous") != null
+
+        if (isAnonymous) {
+            // Rimuoviamo l'header "finto" prima di inviare la richiesta a Google,
+            // altrimenti la richiesta potrebbe essere malformata.
+            builder.removeHeader("X-Anonymous")
+        }
+
+        // 2. LOGICA COOKIE CONDIZIONALE
+        // Aggiungiamo il cookie e la firma SOLO se NON siamo in modalità anonima
+        // e se abbiamo effettivamente un cookie salvato.
+        if (!isAnonymous && currentCookie.isNotBlank()) {
             val cleanCookie = currentCookie.trim().replace("\n", "").replace("\r", "")
             try {
-                // 1. Cookie
+                // A. Aggiungi il Cookie
                 builder.addHeader("Cookie", cleanCookie)
 
-                // 2. Authorization Hash (OuterTune Logic)
+                // B. Aggiungi Authorization Hash (Logica OuterTune)
                 val sapisid = extractSAPISID(cleanCookie)
                 if (sapisid != null) {
                     val hash = getSAPISIDHASH(sapisid, "https://music.youtube.com")
@@ -84,6 +101,7 @@ object YouTubeClient {
                 e.printStackTrace()
             }
         }
+
         chain.proceed(builder.build())
     }
 

@@ -19,22 +19,23 @@ class MusicService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
 
-        // 1. Usiamo lo stesso User-Agent del Client (IMPORTANTE per non essere bloccati)
-        val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.45 Safari/537.36"
+        // 1. Usa lo stesso User-Agent definito in YouTubeClient per ANDROID
+        // Questo è FONDAMENTALE: se usi un UA diverso, il server blocca lo stream (403)
+        val userAgent = "com.google.android.youtube/19.29.35 (Linux; U; Android 14) gzip"
 
-        // 2. CONFIGURAZIONE FONDAMENTALE: Aggiungiamo Referer e Origin
-        // Senza questi header, YouTube blocca lo stream audio (Errore 403 Forbidden)
+        // 2. Configurazione Headers per ExoPlayer
         val defaultHttpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent(userAgent)
             .setAllowCrossProtocolRedirects(true)
             .setDefaultRequestProperties(
                 mapOf(
-                    "Referer" to "https://music.youtube.com/",
-                    "Origin" to "https://music.youtube.com"
+                    // L'app Android usa questi header, non music.youtube.com
+                    "Referer" to "https://www.youtube.com/",
+                    "Origin" to "https://www.youtube.com"
                 )
             )
 
-        // 3. Costruiamo il player usando questa configurazione di rete personalizzata
+        // 3. Costruiamo il player
         player = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(defaultHttpDataSourceFactory))
             .build()
