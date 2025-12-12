@@ -75,7 +75,7 @@ fun MiniPlayerContent(
                 AsyncImage(
                     model = coverUrl,
                     contentDescription = null,
-                    modifier = Modifier.fillMaxSize().alpha(0.5f),
+                    modifier = Modifier.fillMaxSize(),
                     placeholder = fp, error = fp, fallback = fp
                 )
             }

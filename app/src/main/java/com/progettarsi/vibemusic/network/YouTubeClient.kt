@@ -64,9 +64,18 @@ object YouTubeClient {
     }
 
     // Crea il body per la richiesta "Radio/Next"
+    // Crea il body per la richiesta "Radio/Next"
     fun createNextBody(videoId: String) = createBody("WEB_REMIX", WEB_REMIX_VERSION, videoId).apply {
         addProperty("enablePersistentPlaylistPanel", true)
         addProperty("isAudioOnly", true)
+
+        // --- IL TRUCCO DI OUTERTUNE ---
+        // Per avviare una "Radio", dobbiamo fingere di essere dentro la playlist speciale
+        // generata per quel video. Il prefisso è sempre "RDAMVM".
+        addProperty("playlistId", "RDAMVM$videoId")
+
+        // Questo parametro (Automix) è utile per confermare l'intenzione, lasciamolo.
+        addProperty("params", "wAEB")
     }
 
     // --- INTERCEPTOR: SOLO AUTH ---

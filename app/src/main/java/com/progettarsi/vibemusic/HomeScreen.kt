@@ -57,7 +57,8 @@ fun HomeScreen(
         },
 
         onPlayTrack = { list, index ->
-            musicViewModel.playPlaylist(list, index)
+            // Quando clicchi su New Drops, chiamiamo la playlist "New Drops" o "Home Picks"
+            musicViewModel.playPlaylist(list, index, sourceName = "New Drops")
         }
     )
 }

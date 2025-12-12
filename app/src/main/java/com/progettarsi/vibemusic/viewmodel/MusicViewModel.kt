@@ -29,6 +29,8 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MusicViewModel : ViewModel() {
+    var currentQueueTitle by mutableStateOf("Coda")
+        private set
     var queue = mutableStateListOf<Song>()
         private set
     var currentSongIndex by mutableStateOf(-1)
@@ -51,26 +53,45 @@ class MusicViewModel : ViewModel() {
     var duration by mutableFloatStateOf(1f)
     var currentSong by mutableStateOf<Song?>(null)
 
-    fun playPlaylist(songs: List<Song>, startIndex: Int = 0) {
+    var isLoopMode by mutableStateOf(false)
+    var isShuffleMode by mutableStateOf(false)
+
+    fun toggleLoop() {
+        isLoopMode = !isLoopMode
+        // Qui in futuro aggiungerai la logica ExoPlayer:
+        // mediaController?.repeatMode = if(isLoopMode) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+    }
+
+    fun toggleShuffle() {
+        isShuffleMode = !isShuffleMode
+        // Qui in futuro aggiungerai la logica ExoPlayer:
+        // mediaController?.shuffleModeEnabled = isShuffleMode
+    }
+
+    fun playPlaylist(songs: List<Song>, startIndex: Int = 0, sourceName: String = "Playlist") {
         queue.clear()
         queue.addAll(songs)
         currentSongIndex = startIndex
+
+        // Impostiamo il titolo
+        currentQueueTitle = sourceName
+
         playSong(queue[startIndex])
     }
 
     fun playCollection(collection: YTCollection) {
-        // Mostra stato di caricamento nella UI (opzionale, per ora usiamo il titolo)
         currentTitle = collection.title
         currentArtist = "Caricamento..."
         isBuffering = true
 
-        viewModelScope.launch {
-            // Scarica le canzoni
-            val songs = repository.getPlaylistSongs(collection.id)
+        // Impostiamo il titolo (es. "Top 50 - Italy")
+        currentQueueTitle = collection.title
 
+        viewModelScope.launch {
+            val songs = repository.getPlaylistSongs(collection.id)
             if (songs.isNotEmpty()) {
-                // Avvia la playlist usando la funzione che abbiamo creato prima
-                playPlaylist(songs, startIndex = 0)
+                // Passiamo il nome anche qui per sicurezza, anche se l'abbiamo settato sopra
+                playPlaylist(songs, startIndex = 0, sourceName = collection.title)
             } else {
                 currentArtist = "Errore caricamento"
                 isBuffering = false
@@ -109,13 +130,15 @@ class MusicViewModel : ViewModel() {
 
     // --- START RADIO ---
     fun startRadio(song: Song) {
-        // 1. Resetta la coda e suona subito il brano selezionato
         queue.clear()
         queue.add(song)
         currentSongIndex = 0
-        playSong(song) // Questo avvia il playback immediato
 
-        // 2. Scarica la radio in background
+        // Impostiamo il titolo dinamico
+        currentQueueTitle = "Radio ${song.title}"
+
+        playSong(song)
+
         viewModelScope.launch {
             val radioSongs = repository.getRadio(song.videoId)
 
