@@ -125,6 +125,37 @@ object SongParser {
         return null
     }
 
+    fun parseCollectionContent(jsonObject: JsonObject): List<Song> {
+        val songs = mutableListOf<Song>()
+        try {
+            // Cerchiamo la lista di canzoni.
+            // Di solito è in: contents -> twoColumnBrowseResultsRenderer -> secondaryContents -> sectionListRenderer -> contents -> musicPlaylistShelfRenderer
+            val secondaryContents = jsonObject.getAsJsonObject("contents")
+                ?.getAsJsonObject("twoColumnBrowseResultsRenderer")
+                ?.getAsJsonObject("secondaryContents")
+                ?.getAsJsonObject("sectionListRenderer")
+                ?.getAsJsonArray("contents")
+
+            secondaryContents?.forEach { section ->
+                val shelf = section.asJsonObject.getAsJsonObject("musicPlaylistShelfRenderer")
+                if (shelf != null) {
+                    shelf.getAsJsonArray("contents")?.forEach { item ->
+                        val itemObj = item.asJsonObject.getAsJsonObject("musicResponsiveListItemRenderer")
+                        if (itemObj != null) {
+                            val parsedItem = parseResponsiveItem(itemObj)
+                            if (parsedItem is Song) {
+                                songs.add(parsedItem)
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("SongParser", "Errore Parsing Collection: ${e.message}")
+        }
+        return songs
+    }
+
     // --- HELPER FUNZIONI ---
     private fun extractCover(thumbnailContainer: JsonObject?): String {
         val thumbnails = thumbnailContainer?.getAsJsonObject("musicThumbnailRenderer")

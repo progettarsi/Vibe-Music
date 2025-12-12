@@ -1,6 +1,6 @@
 [versions]
 # Plugin e Kotlin
-agp = "8.13.1"
+agp = "8.13.2"
 kotlin = "2.2.21"
 ksp = "2.2.21-2.0.4"
 material3 = "1.5.0-alpha10"

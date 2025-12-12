@@ -6,6 +6,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
@@ -17,6 +18,7 @@ import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
 import com.progettarsi.vibemusic.model.Song
+import com.progettarsi.vibemusic.model.YTCollection
 import com.progettarsi.vibemusic.network.YouTubeClient
 import com.progettarsi.vibemusic.network.YouTubeRepository
 import com.progettarsi.vibemusic.service.MusicService
@@ -27,6 +29,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class MusicViewModel : ViewModel() {
+    var queue = mutableStateListOf<Song>()
+        private set
+    var currentSongIndex by mutableStateOf(-1)
     private val repository = YouTubeRepository()
     private var progressJob: Job? = null
     private var mediaController: MediaController? = null
@@ -45,6 +50,41 @@ class MusicViewModel : ViewModel() {
     var progress by mutableFloatStateOf(0f)
     var duration by mutableFloatStateOf(1f)
     var currentSong by mutableStateOf<Song?>(null)
+
+    fun playPlaylist(songs: List<Song>, startIndex: Int = 0) {
+        queue.clear()
+        queue.addAll(songs)
+        currentSongIndex = startIndex
+        playSong(queue[startIndex])
+    }
+
+    fun playCollection(collection: YTCollection) {
+        // Mostra stato di caricamento nella UI (opzionale, per ora usiamo il titolo)
+        currentTitle = collection.title
+        currentArtist = "Caricamento..."
+        isBuffering = true
+
+        viewModelScope.launch {
+            // Scarica le canzoni
+            val songs = repository.getPlaylistSongs(collection.id)
+
+            if (songs.isNotEmpty()) {
+                // Avvia la playlist usando la funzione che abbiamo creato prima
+                playPlaylist(songs, startIndex = 0)
+            } else {
+                currentArtist = "Errore caricamento"
+                isBuffering = false
+                Log.e("MusicViewModel", "Nessuna canzone trovata per la raccolta: ${collection.title}")
+            }
+        }
+    }
+
+    fun skipToNext() {
+        if (queue.isNotEmpty() && currentSongIndex < queue.lastIndex) {
+            currentSongIndex++
+            loadAndPlay(queue[currentSongIndex])
+        }
+    }
 
     fun initPlayer(context: Context) {
         // 1. Inizializza Cookie
@@ -65,6 +105,18 @@ class MusicViewModel : ViewModel() {
                 Log.e("MusicViewModel", "Errore init player: ${e.message}")
             }
         }, MoreExecutors.directExecutor())
+    }
+
+    fun skipToPrevious() {
+        // Se siamo oltre i 3 secondi, riavvia la canzone corrente (comportamento standard tipo Spotify)
+        if (progress > 0.05f) { // circa il 5% o 3 secondi
+            seekTo(0f)
+        } else {
+            if (queue.isNotEmpty() && currentSongIndex > 0) {
+                currentSongIndex--
+                loadAndPlay(queue[currentSongIndex])
+            }
+        }
     }
 
     // --- FUNZIONI DI LOGIN (Quelle che mancavano) ---
@@ -98,9 +150,15 @@ class MusicViewModel : ViewModel() {
 
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = (playbackState == Player.STATE_BUFFERING)
+
+                // AUTO-PLAY NEXT SONG
                 if (playbackState == Player.STATE_ENDED) {
-                    isPlaying = false
-                    progress = 0f
+                    if (currentSongIndex < queue.lastIndex) {
+                        skipToNext()
+                    } else {
+                        isPlaying = false
+                        progress = 0f
+                    }
                 }
             }
 
@@ -124,7 +182,7 @@ class MusicViewModel : ViewModel() {
         })
     }
 
-    fun playSong(song: Song) {
+    private fun loadAndPlay(song: Song) {
         // UI Optimistic update
         currentTitle = song.title
         currentArtist = song.artist
@@ -155,8 +213,27 @@ class MusicViewModel : ViewModel() {
             } else {
                 Log.e("MusicViewModel", "URL Stream non trovato")
                 isBuffering = false
+                // Se fallisce, prova la prossima
+                skipToNext()
             }
         }
+    }
+
+    fun playSong(song: Song) {
+        // Se la canzone non è nella queue attuale, puliamo e la mettiamo come singola
+        // (Oppure potresti aggiungerla in fondo, dipende dalla UX che vuoi)
+        if (!queue.contains(song)) {
+            queue.clear()
+            queue.add(song)
+            currentSongIndex = 0
+        } else {
+            currentSongIndex = queue.indexOf(song)
+        }
+
+        // ... (Il resto del tuo codice playSong esistente rimane uguale per ora) ...
+        // Assicurati solo di aggiornare currentSongIndex correttamente
+
+        loadAndPlay(song) // Ho rinominato la tua logica attuale in loadAndPlay per chiarezza
     }
 
     fun playTestTrack() {
@@ -227,4 +304,6 @@ class MusicViewModel : ViewModel() {
         mediaController?.release()
         super.onCleared()
     }
+
+    companion object
 }

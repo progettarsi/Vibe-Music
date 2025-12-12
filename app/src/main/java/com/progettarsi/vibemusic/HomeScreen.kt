@@ -1,9 +1,7 @@
 package com.progettarsi.vibemusic
 
-import androidx.benchmark.traceprocessor.Row
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -53,11 +51,18 @@ fun HomeScreen(
         onRefresh = { homeViewModel.fetchHomeContent() },
         onRadioClick = { /* TODO */ },
         onPlaylistClick = { /* TODO */ },
-        onSongClick = { song -> musicViewModel.playSong(song) }
+        // --- MODIFICA QUI: Colleghiamo la UI alla funzione playPlaylist del ViewModel ---
+        onCollectionClick = { collection ->
+            musicViewModel.playCollection(collection)
+        },
+
+        onPlayTrack = { list, index ->
+            musicViewModel.playPlaylist(list, index)
+        }
     )
 }
 
-// 2. COMPONENTE STATELESS (Pura UI - Visualizzabile in Preview)
+// 2. COMPONENTE STATELESS (Pura UI)
 @Composable
 fun HomeScreenContent(
     topPadding: Dp,
@@ -67,7 +72,10 @@ fun HomeScreenContent(
     onRefresh: () -> Unit,
     onRadioClick: () -> Unit,
     onPlaylistClick: (Playlist) -> Unit,
-    onSongClick: (Song) -> Unit
+    // --- MODIFICA QUI: La callback ora accetta Lista e Indice ---
+    onPlayTrack: (List<Song>, Int) -> Unit,
+    // Aggiungi questo:
+    onCollectionClick: (YTCollection) -> Unit
 ) {
     SwipeRefresh(
         state = swipeRefreshState,
@@ -97,9 +105,6 @@ fun HomeScreenContent(
             item {
                 YourRadioButton(onClick = onRadioClick)
             }
-
-            // Contenuto Dinamico
-            // ... (parte precedente del file uguale)
 
             // Contenuto Dinamico
             when (uiState) {
@@ -135,37 +140,35 @@ fun HomeScreenContent(
                 }
 
                 is HomeUiState.Success -> {
-                    val homeContent = uiState.data // Ora è List<MusicItem>
+                    val homeContent = uiState.data
 
-                    // 1. FILTRIAMO: Le Raccolte vanno nei Quick Picks
                     val collections = homeContent.filterIsInstance<YTCollection>()
-
-                    // 2. FILTRIAMO: Le Canzoni vanno nei New Drops
                     val songs = homeContent.filterIsInstance<Song>()
 
-                    // Sezione Quick Picks (Album, Mix, Playlist)
                     if (collections.isNotEmpty()) {
                         item {
                             HomeSection(title = "Quick Picks") {
-                                // Per ora la UI di QuickPicksRow vuole 'Song' o 'Playlist'?
-                                // Se la tua QuickPicksRow attuale vuole List<Song>, dobbiamo mappare temporaneamente
-                                // OPPURE (meglio) aggiorniamo QuickPicksRow per accettare YTCollection.
-
-                                // Soluzione rapida: Passiamo collections alla tua griglia
                                 QuickPicksCollectionsRow(collections, onItemClick = { collection ->
-                                    // TODO: Qui implementeremo la coda!
-                                    // Per ora stampiamo solo il log
-                                    println("Hai cliccato la raccolta: ${collection.title}")
+                                    // Chiama la callback che scarica e suona
+                                    onCollectionClick(collection)
                                 })
                             }
                         }
                     }
 
-                    // Sezione New Drops (Canzoni singole)
+                    // Sezione New Drops
                     if (songs.isNotEmpty()) {
                         item {
                             HomeSection(title = "New Drops") {
-                                NewDropsRow(songs, onItemClick = onSongClick)
+                                // --- MODIFICA QUI: Logica per passare la lista ---
+                                NewDropsRow(songs, onItemClick = { song ->
+                                    // 1. Troviamo l'indice della canzone cliccata
+                                    val index = songs.indexOf(song)
+                                    // 2. Chiamiamo la callback passando TUTTA la lista e l'indice
+                                    if (index != -1) {
+                                        onPlayTrack(songs, index)
+                                    }
+                                })
                             }
                         }
                     }
@@ -173,33 +176,4 @@ fun HomeScreenContent(
             }
         }
     }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF121212)
-@Composable
-fun HomeScreenPreview() {
-    // Dati Finti
-    val mockPlaylists = listOf(
-        Playlist("Lo-Fi Study", "Relax", "1", "", 10),
-        Playlist("Gym Pump", "Workout", "2", "", 25),
-        Playlist("Top 50 IT", "Charts", "3", "", 50)
-    )
-    val mockSongs = listOf(
-        Song("v1", "Blinding Lights", "The Weeknd", ""),
-        Song("v2", "Shape of You", "Ed Sheeran", "")
-    )
-
-    // Stato simulato: Successo con dati
-    val mockState = HomeUiState.Success(mockPlaylists + mockSongs)
-
-    HomeScreenContent(
-        topPadding = 24.dp,
-        bottomPadding = 80.dp,
-        uiState = mockState,
-        swipeRefreshState = rememberSwipeRefreshState(isRefreshing = false),
-        onRefresh = {},
-        onRadioClick = {},
-        onPlaylistClick = {},
-        onSongClick = {}
-    )
 }

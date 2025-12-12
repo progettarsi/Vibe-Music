@@ -196,41 +196,54 @@ fun QuickPicksCollectionsRow(
     }
 }
 
+// ... (imports invariati)
+
 @Composable
-fun QuickPicksSong(song: Song, onItemClick: (Song) -> Unit, modifier: Modifier)
-{
+fun QuickPicksCollectionItem(
+    collection: YTCollection,
+    onItemClick: (YTCollection) -> Unit
+) {
     val placeholder = rememberVectorPainter(Icons.Default.Album)
+
     BoxWithConstraints(
-        modifier = Modifier // Prende esattamente 1/3 dell'altezza della colonna
+        modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f)// Riempie tutta la larghezza della colonna
-            .clip(RoundedCornerShape(12.dp)) // Stondatura fissa (consigliata per elementi piccoli)
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
             .background(SurfaceDark)
+            // 1. Rendi l'intero box cliccabile
+            .clickable { onItemClick(collection) }
     ) {
         AsyncImage(
-            model = song.coverUrl,
-            contentDescription = song.title,
+            model = collection.coverUrl,
+            contentDescription = collection.title,
             modifier = Modifier
                 .fillMaxSize()
                 .background(SurfaceDark),
             contentScale = ContentScale.Crop,
-
-            // --- AGGIUNGI QUESTE RIGHE ---
-            placeholder = placeholder, // Mostra questo mentre carica
-            error = placeholder,       // Mostra questo se fallisce (es. in Preview)
-            fallback = placeholder     // Mostra questo se l'URL è nullo
+            placeholder = placeholder,
+            error = placeholder,
+            fallback = placeholder
         )
-        IconButton(onClick = {TODO()}, modifier = Modifier.fillMaxSize(0.7f).align(Alignment.Center)) {
+
+        // 2. Tasto Play (rimosso TODO)
+        // Nota: Puoi decidere se il tasto Play fa la stessa cosa del click sulla card
+        IconButton(
+            onClick = { onItemClick(collection) },
+            modifier = Modifier.fillMaxSize(0.7f).align(Alignment.Center)
+        ) {
             Icon(Icons.Rounded.PlayArrow, null, tint = Color.White.copy(0.7f), modifier = Modifier.fillMaxSize(0.7f))
         }
+
         Box(modifier = Modifier
             .fillMaxWidth()
             .align(Alignment.BottomCenter)
             .fillMaxHeight(0.5f)
             .background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black)))
         )
+
         Text(
-            text = if(song.title.isNotEmpty()){if (song.title.length > 15) song.title.take(15) + "..." else song.title} else "PlaceHolder",
+            text = if(collection.title.isNotEmpty()){if (collection.title.length > 15) collection.title.take(15) + "..." else collection.title} else "Raccolta",
             color = Color.White,
             fontSize = (maxWidth.value * 0.10f).sp,
             fontWeight = FontWeight.SemiBold,
@@ -240,42 +253,51 @@ fun QuickPicksSong(song: Song, onItemClick: (Song) -> Unit, modifier: Modifier)
 }
 
 @Composable
-fun QuickPicksCollectionItem(
-    collection: YTCollection,
-    onItemClick: (YTCollection) -> Unit
+fun QuickPicksSong(
+    song: Song,
+    onItemClick: (Song) -> Unit,
+    modifier: Modifier
 ) {
     val placeholder = rememberVectorPainter(Icons.Default.Album)
+
     BoxWithConstraints(
-        modifier = Modifier // Prende esattamente 1/3 dell'altezza della colonna
+        modifier = modifier // Usa il modifier passato
             .fillMaxWidth()
-            .aspectRatio(1f)// Riempie tutta la larghezza della colonna
-            .clip(RoundedCornerShape(12.dp)) // Stondatura fissa (consigliata per elementi piccoli)
+            .aspectRatio(1f)
+            .clip(RoundedCornerShape(12.dp))
             .background(SurfaceDark)
+            // 1. Rendi cliccabile
+            .clickable { onItemClick(song) }
     ) {
         AsyncImage(
-            model = collection.coverUrl,
-            contentDescription = collection.title,
+            model = song.coverUrl,
+            contentDescription = song.title,
             modifier = Modifier
                 .fillMaxSize()
                 .background(SurfaceDark),
             contentScale = ContentScale.Crop,
-
-            // --- AGGIUNGI QUESTE RIGHE ---
-            placeholder = placeholder, // Mostra questo mentre carica
-            error = placeholder,       // Mostra questo se fallisce (es. in Preview)
-            fallback = placeholder     // Mostra questo se l'URL è nullo
+            placeholder = placeholder,
+            error = placeholder,
+            fallback = placeholder
         )
-        IconButton(onClick = {TODO()}, modifier = Modifier.fillMaxSize(0.7f).align(Alignment.Center)) {
+
+        // 2. Rimosso TODO
+        IconButton(
+            onClick = { onItemClick(song) },
+            modifier = Modifier.fillMaxSize(0.7f).align(Alignment.Center)
+        ) {
             Icon(Icons.Rounded.PlayArrow, null, tint = Color.White.copy(0.7f), modifier = Modifier.fillMaxSize(0.7f))
         }
+
         Box(modifier = Modifier
             .fillMaxWidth()
             .align(Alignment.BottomCenter)
             .fillMaxHeight(0.5f)
             .background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black)))
         )
+
         Text(
-            text = if(collection.title.isNotEmpty()){if (collection.title.length > 15) collection.title.take(15) + "..." else collection.title} else "PlaceHolder",
+            text = if(song.title.isNotEmpty()){if (song.title.length > 15) song.title.take(15) + "..." else song.title} else "Brano",
             color = Color.White,
             fontSize = (maxWidth.value * 0.10f).sp,
             fontWeight = FontWeight.SemiBold,

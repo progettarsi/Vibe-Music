@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.lerp as lerpColor // Alias per evitare confl
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
@@ -59,6 +60,7 @@ fun MorphingSearchDock(
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val showBlur = playerProgress == 0f
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val focusManager = LocalFocusManager.current
 
@@ -84,21 +86,20 @@ fun MorphingSearchDock(
         derivedStateOf { lerp(16.dp, 0.dp, fullScreenModeProgress) }
     }
 
-    // OTTIMIZZAZIONE 2: Memorizziamo oggetti costosi per evitare allocazioni ad ogni frame
     val glassColor = remember { Color(0xFF252530).copy(alpha = 0.65f) }
+    // Colore di fallback più coprente per quando Haze è spento durante l'animazione
+    val fastGlassColor = remember { Color(0xFF252530).copy(alpha = 0.95f) }
     val borderStroke = remember { BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)) }
     val hazeStyle = remember {
         HazeStyle(backgroundColor = DarkBackground, tint = HazeTint(Color.Black.copy(alpha = 0.2f)), blurRadius = 24.dp)
     }
 
     val context = LocalContext.current
-    val placeholders = remember {
-        listOf(
-            context.getString(R.string.search_placeholder_1),
-            context.getString(R.string.search_placeholder_2),
-            context.getString(R.string.search_placeholder_3)
-        )
-    }
+    val placeholders = listOf(
+        stringResource(R.string.search_placeholder_1),
+        stringResource(R.string.search_placeholder_2),
+        stringResource(R.string.search_placeholder_3)
+    )
     var currentPlaceholder by remember { mutableStateOf(placeholders.first()) }
 
     LaunchedEffect(searchState.isSearching) {
@@ -183,16 +184,19 @@ fun MorphingSearchDock(
                         if (targetPlayerWidth > 1.dp) {
                             val playerShape = if(playerProgress > 0.1f) RoundedCornerShape(0.dp) else RoundedCornerShape(32.dp)
 
+                            val isStaticMiniPlayer = playerProgress < 0.01f
+
                             Surface(
-                                color = if(playerProgress > 0.1f) Color.Transparent else glassColor,
+                                // Se non c'è blur, usa un colore leggermente più solido
+                                color = if (isStaticMiniPlayer) glassColor else fastGlassColor,
                                 shape = playerShape,
                                 border = if(playerProgress > 0.1f) null else borderStroke,
                                 modifier = Modifier
                                     .width(targetPlayerWidth)
                                     .height(if(playerProgress > 0.1f) animatedHeight else 64.dp)
                                     .clip(playerShape)
-                                    // Applicare Haze solo se necessario (risparmia GPU)
-                                    .then(if(playerProgress < 0.9f) Modifier.hazeChild(hazeState, style = hazeStyle) else Modifier)
+                                    // APPLICAZIONE CONDIZIONALE OTTIMIZZATA
+                                    .then(if(isStaticMiniPlayer) Modifier.hazeChild(hazeState, style = hazeStyle) else Modifier)
                             ) {
                                 Box {
                                     if (playerProgress > 0.01f) {

@@ -52,6 +52,24 @@ class YouTubeRepository {
         }
     }
 
+    suspend fun getPlaylistSongs(browseId: String): List<Song> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val headers = YouTubeClient.getClientHeaders(YouTubeClient.ClientType.WEB_REMIX)
+                // Usiamo createBrowseBody che hai già in YouTubeClient
+                val body = YouTubeClient.createBrowseBody(browseId)
+
+                val response = YouTubeClient.api.browse(YouTubeClient.API_KEY, headers, body)
+
+                // Usiamo il nuovo parser
+                SongParser.parseCollectionContent(response)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emptyList()
+            }
+        }
+    }
+
     // --- 3. STREAM AUDIO (Usa client IOS/ANDROID) ---
     suspend fun getStreamUrl(videoId: String): String? {
         return withContext(Dispatchers.IO) {

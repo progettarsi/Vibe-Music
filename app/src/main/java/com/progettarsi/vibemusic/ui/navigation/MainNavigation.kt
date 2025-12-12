@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
@@ -127,19 +128,28 @@ fun MainNavigation(
             }
 
             // LIVELLO 2: DIMMER RICERCA (Oscura la home quando cerchi)
+            // MODIFICA QUI: Non calcolare il blurRadius dinamicamente
+// Invece di: blurRadius = (searchProgress * 20).dp
+// Usa un valore fisso e anima l'alpha del contenitore.
+
+// LIVELLO 2: DIMMER RICERCA (Oscura la home quando cerchi)
             if (searchProgress > 0f) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = searchProgress * 0.8f))
+                        .background(Color.Black.copy(alpha = searchProgress * 0.4f)) // Riduci alpha sfondo nero
+                        // --- OTTIMIZZAZIONE HAZE ---
+                        // Usiamo graphicsLayer per l'alpha, così Haze calcola il blur una volta sola
+                        .graphicsLayer { alpha = searchProgress }
                         .hazeChild(
                             state = hazeState,
                             style = HazeStyle(
                                 backgroundColor = DarkBackground,
-                                tint = HazeTint(Color.Black.copy(0.5f)),
-                                blurRadius = (searchProgress * 20).dp
+                                tint = HazeTint(Color.Black.copy(0.6f)),
+                                blurRadius = 20.dp // Raggio FISSO
                             )
                         )
+                        // ---------------------------
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null
