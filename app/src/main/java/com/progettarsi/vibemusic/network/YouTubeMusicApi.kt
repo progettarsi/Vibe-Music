@@ -27,4 +27,10 @@ interface YouTubeMusicApi {
         @HeaderMap headers: Map<String, String>, // <--- AGGIUNTO
         @Body body: JsonObject
     ): JsonObject
+    @POST("youtubei/v1/next")
+    suspend fun next(
+        @Query("key") apiKey: String,
+        @HeaderMap headers: Map<String, String>,
+        @Body body: JsonObject
+    ): JsonObject
 }

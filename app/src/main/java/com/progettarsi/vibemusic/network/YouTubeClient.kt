@@ -63,6 +63,12 @@ object YouTubeClient {
         return headers
     }
 
+    // Crea il body per la richiesta "Radio/Next"
+    fun createNextBody(videoId: String) = createBody("WEB_REMIX", WEB_REMIX_VERSION, videoId).apply {
+        addProperty("enablePersistentPlaylistPanel", true)
+        addProperty("isAudioOnly", true)
+    }
+
     // --- INTERCEPTOR: SOLO AUTH ---
     // Questo si occupa solo di aggiungere Cookie e Firma di sicurezza
     // --- INTERCEPTOR: SOLO AUTH ---

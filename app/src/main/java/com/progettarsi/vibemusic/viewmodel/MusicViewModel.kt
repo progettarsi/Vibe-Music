@@ -107,6 +107,29 @@ class MusicViewModel : ViewModel() {
         }, MoreExecutors.directExecutor())
     }
 
+    // --- START RADIO ---
+    fun startRadio(song: Song) {
+        // 1. Resetta la coda e suona subito il brano selezionato
+        queue.clear()
+        queue.add(song)
+        currentSongIndex = 0
+        playSong(song) // Questo avvia il playback immediato
+
+        // 2. Scarica la radio in background
+        viewModelScope.launch {
+            val radioSongs = repository.getRadio(song.videoId)
+
+            // Filtriamo la lista per non duplicare la canzone che sta già suonando
+            val newSongs = radioSongs.filter { it.videoId != song.videoId }
+
+            if (newSongs.isNotEmpty()) {
+                // Aggiungi le canzoni alla coda esistente
+                queue.addAll(newSongs)
+                Log.d("MusicViewModel", "Radio caricata: ${newSongs.size} brani aggiunti")
+            }
+        }
+    }
+
     fun skipToPrevious() {
         // Se siamo oltre i 3 secondi, riavvia la canzone corrente (comportamento standard tipo Spotify)
         if (progress > 0.05f) { // circa il 5% o 3 secondi

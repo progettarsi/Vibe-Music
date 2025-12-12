@@ -125,6 +125,45 @@ object SongParser {
         return null
     }
 
+    // --- 4. PARSING RADIO (Up Next) ---
+    fun parseNextContent(jsonObject: JsonObject): List<Song> {
+        val songs = mutableListOf<Song>()
+        try {
+            // Percorso: contents -> twoColumnWatchNextResults -> playlist -> playlistPanelRenderer
+            val playlistPanel = jsonObject.getAsJsonObject("contents")
+                ?.getAsJsonObject("twoColumnWatchNextResults")
+                ?.getAsJsonObject("playlist")
+                ?.getAsJsonObject("playlistPanelRenderer")
+
+            playlistPanel?.getAsJsonArray("contents")?.forEach { item ->
+                val renderer = item.asJsonObject.getAsJsonObject("playlistPanelVideoRenderer")
+                if (renderer != null) {
+                    val videoId = renderer.get("videoId")?.asString ?: ""
+
+                    // Titolo
+                    val titleObj = renderer.getAsJsonObject("title")
+                    val title = titleObj?.getAsJsonPrimitive("simpleText")?.asString
+                        ?: titleObj?.getAsJsonArray("runs")?.get(0)?.asJsonObject?.get("text")?.asString
+                        ?: ""
+
+                    // Artista
+                    val longByline = renderer.getAsJsonObject("longBylineText")
+                    val artist = longByline?.getAsJsonArray("runs")?.get(0)?.asJsonObject?.get("text")?.asString
+                        ?: ""
+
+                    val coverUrl = extractCover(renderer.getAsJsonObject("thumbnail"))
+
+                    if (videoId.isNotEmpty()) {
+                        songs.add(Song(videoId, title, artist, coverUrl))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("SongParser", "Errore Parsing Radio: ${e.message}")
+        }
+        return songs
+    }
+
     fun parseCollectionContent(jsonObject: JsonObject): List<Song> {
         val songs = mutableListOf<Song>()
         try {

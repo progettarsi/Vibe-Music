@@ -52,6 +52,21 @@ class YouTubeRepository {
         }
     }
 
+    // --- 5. RADIO / UP NEXT ---
+    suspend fun getRadio(videoId: String): List<Song> {
+        return withContext(Dispatchers.IO) {
+            try {
+                val headers = YouTubeClient.getClientHeaders(YouTubeClient.ClientType.WEB_REMIX)
+                val body = YouTubeClient.createNextBody(videoId)
+                val response = YouTubeClient.api.next(YouTubeClient.API_KEY, headers, body)
+                SongParser.parseNextContent(response)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                emptyList()
+            }
+        }
+    }
+
     suspend fun getPlaylistSongs(browseId: String): List<Song> {
         return withContext(Dispatchers.IO) {
             try {

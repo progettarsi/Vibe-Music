@@ -299,7 +299,10 @@ fun MorphingSearchDock(
                                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                                     items(searchViewModel.searchResults.toList()) { song ->
                                         SongResultItem(song) {
-                                            musicViewModel.playSong(song)
+                                            // PRIMA: musicViewModel.playSong(song)
+                                            // ORA:
+                                            musicViewModel.startRadio(song)
+
                                             focusManager.clearFocus()
                                         }
                                     }
