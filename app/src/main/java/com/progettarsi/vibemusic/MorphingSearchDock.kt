@@ -315,34 +315,8 @@ fun MorphingSearchDock(
                                             }
                                         }
 
-                                        SwipeToDismissBox(
-                                            state = dismissState,
-                                            enableDismissFromStartToEnd = false,
-                                            enableDismissFromEndToStart = true,
-                                            backgroundContent = {
-                                                // Mostra lo sfondo SOLO durante lo swipe attivo
-                                                val isSwiping = dismissState.progress > 0.0f && dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart
-                                                if (isSwiping) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .fillMaxSize()
-                                                            .background(com.progettarsi.vibemusic.ui.theme.PurplePrimary)
-                                                            .padding(horizontal = 24.dp),
-                                                        contentAlignment = Alignment.CenterEnd
-                                                    ) {
-                                                        Icon(Icons.Default.PlaylistAdd, "Play Next", tint = Color.White)
-                                                    }
-                                                }
-                                            }
-                                        ) {
-                                            // Elemento UI Originale (Gestisce il click in autonomia)
-                                            SongResultItem(
-                                                song = song,
-                                                onClick = {
-                                                    musicViewModel.startRadio(song)
-                                                    focusManager.clearFocus()
-                                                }
-                                            )
+                                        SwipeableActionBox(fromLeftSwipe = {musicViewModel.addQueue(song)}, fromRightSwipe = {musicViewModel.playNext(song)}) {
+                                            SongResultItem(song = song, onClick = { musicViewModel.playSong(song) })
                                         }
                                     }
                                 }

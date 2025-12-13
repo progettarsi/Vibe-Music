@@ -21,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -33,7 +34,6 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,8 +44,8 @@ import com.progettarsi.vibemusic.ui.theme.PurplePrimary
 import com.progettarsi.vibemusic.ui.theme.SurfaceHighlight
 import com.progettarsi.vibemusic.ui.theme.TextGrey
 import com.progettarsi.vibemusic.viewmodel.MusicViewModel
+import com.progettarsi.vibemusic.viewmodel.QueueItem // <--- IMPORTANTE: Importa la classe QueueItem
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -129,67 +129,80 @@ fun QueueScreen(
 
             itemsIndexed(
                 items = queue,
-                // Usiamo una key unica se possibile, altrimenti l'URL o l'indice.
-                // Questo aiuta l'animazione di rimozione a essere fluida.
-                key = { _, song -> song.mediaId ?: song.hashCode() }
-            ) { index, song ->
+                // CORREZIONE: Usiamo uniqueId del wrapper QueueItem, non videoId della Song
+                key = { _, item -> item.uniqueId }
+            ) { index, item ->
+
+                // CORREZIONE: Estraiamo la canzone dal wrapper
+                val song = item.song
 
                 val isPlaying = index == musicViewModel.currentSongIndex
 
-                // Impediamo di rimuovere la canzone attualmente in riproduzione
+                // Animazione fluida per il riposizionamento
+                val itemModifier = Modifier.animateItem()
+
                 val canDismiss = !isPlaying
 
                 if (canDismiss) {
                     val dismissState = rememberSwipeToDismissBoxState(
                         confirmValueChange = { dismissValue ->
-                            // Swipe DA SINISTRA A DESTRA (StartToEnd)
                             if (dismissValue == SwipeToDismissBoxValue.StartToEnd) {
-                                musicViewModel.removeSongAt(index)
-                                true // Conferma la rimozione
+                                // CORREZIONE: Usiamo removeQueueItem invece di removeSong
+                                musicViewModel.removeQueueItem(item)
+                                true
                             } else {
                                 false
                             }
                         }
                     )
 
-                    SwipeToDismissBox(
-                        state = dismissState,
-                        enableDismissFromStartToEnd = true, // Abilita solo sinistra -> destra
-                        enableDismissFromEndToStart = false,
-                        backgroundContent = {
-                            val color = Color(0xFFCF6679) // Rosso Material Desaturato (Dark Mode friendly)
+                    // Maschera (Clip) per evitare che l'animazione esca dai bordi
+                    Box(
+                        modifier = itemModifier // Applichiamo animateItem qui
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                    ) {
+                        SwipeToDismissBox(
+                            state = dismissState,
+                            enableDismissFromStartToEnd = true,
+                            enableDismissFromEndToStart = false,
+                            backgroundContent = {
+                                val alpha = dismissState.progress.coerceIn(0f, 1f)
+                                val color = Color(0xFFCF6679).copy(alpha = alpha)
 
-                            // Visualizziamo lo sfondo solo se stiamo trascinando verso destra
-                            if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .clip(RoundedCornerShape(12.dp)) // Stesso round dell'item
-                                        .background(color)
-                                        .padding(horizontal = 20.dp),
-                                    contentAlignment = Alignment.CenterStart // Icona a Sinistra
-                                ) {
-                                    Icon(
-                                        Icons.Default.Close,
-                                        contentDescription = "Remove",
-                                        tint = Color.White
-                                    )
+                                if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(color)
+                                            .padding(horizontal = 20.dp),
+                                        contentAlignment = Alignment.CenterStart
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Remove",
+                                            tint = Color.White.copy(alpha = alpha),
+                                            modifier = Modifier.scale(0.8f + (0.2f * alpha))
+                                        )
+                                    }
                                 }
                             }
+                        ) {
+                            QueueItem(
+                                song = song,
+                                isPlaying = isPlaying,
+                                // CORREZIONE: Usiamo playQueueItem per settare l'indice corretto
+                                onClick = { musicViewModel.playQueueItem(item) }
+                            )
                         }
-                    ) {
-                        QueueItem(
-                            song = song,
-                            isPlaying = isPlaying,
-                            onClick = { musicViewModel.playSong(song) }
-                        )
                     }
                 } else {
-                    // Se è la canzone corrente, renderizzala normalmente senza swipe
+                    // Item corrente (non swipabile)
                     QueueItem(
                         song = song,
                         isPlaying = isPlaying,
-                        onClick = { musicViewModel.playSong(song) }
+                        onClick = { musicViewModel.playQueueItem(item) },
+                        modifier = itemModifier // Applichiamo animateItem anche qui
                     )
                 }
             }
@@ -242,9 +255,14 @@ fun QueueScreen(
 }
 
 @Composable
-fun QueueItem(song: Song, isPlaying: Boolean, onClick: () -> Unit) {
+fun QueueItem(
+    song: Song,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier // Parametro per animazione
+) {
     Row(
-        modifier = Modifier
+        modifier = modifier // Applichiamo il modificatore esterno (per animateItem)
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(if (isPlaying) SurfaceHighlight else Color.Transparent)

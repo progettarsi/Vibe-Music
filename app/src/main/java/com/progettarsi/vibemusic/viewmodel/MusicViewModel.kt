@@ -28,15 +28,26 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+// Wrapper per la coda
+data class QueueItem(
+    val uniqueId: String = java.util.UUID.randomUUID().toString(),
+    val song: Song
+)
+
 class MusicViewModel : ViewModel() {
     var currentQueueTitle by mutableStateOf("Coda")
         private set
-    var queue = mutableStateListOf<Song>()
+
+    var queue = mutableStateListOf<QueueItem>()
         private set
+
     var currentSongIndex by mutableStateOf(-1)
     private val repository = YouTubeRepository()
     private var progressJob: Job? = null
     private var mediaController: MediaController? = null
+
+    // Job per la radio (per poterlo annullare se cambiamo canzone velocemente)
+    private var radioLoadingJob: Job? = null
 
     // --- GESTIONE COOKIE E LOGIN ---
     private lateinit var cookieManager: CookieManager
@@ -56,92 +67,159 @@ class MusicViewModel : ViewModel() {
     var isLoopMode by mutableStateOf(false)
     var isShuffleMode by mutableStateOf(false)
 
-    fun toggleLoop() {
-        isLoopMode = !isLoopMode
-        // Qui in futuro aggiungerai la logica ExoPlayer:
-        // mediaController?.repeatMode = if(isLoopMode) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-    }
+    // --- GESTIONE AZIONI UTENTE (Gesture, Click, ecc.) ---
 
-    fun optimizeQueue() {
-        val historyLimit = 5
-        // Se siamo oltre la 5a canzone (indice > 5)
-        if (currentSongIndex > historyLimit) {
-            val songsToRemove = currentSongIndex - historyLimit
+    // 1. Play Song (Click dalla Ricerca): Avvia canzone + Radio automatica
+    fun playSong(song: Song) {
+        // Resettiamo la coda perché stiamo avviando un nuovo flusso
+        queue.clear()
 
-            // Rimuoviamo le canzoni vecchie dall'inizio della lista
-            queue.removeRange(0, songsToRemove)
+        // Aggiungiamo la canzone cliccata
+        val firstItem = QueueItem(song = song)
+        queue.add(firstItem)
 
-            // IMPORTANTISSIMO: Dobbiamo aggiornare l'indice corrente perché
-            // la canzone che stiamo ascoltando è scivolata indietro nella lista!
-            currentSongIndex -= songsToRemove
+        // Impostiamo indici e titoli
+        currentSongIndex = 0
+        currentQueueTitle = "Radio ${song.title}"
+
+        // Avviamo la riproduzione
+        loadAndPlay(song)
+
+        // AVVIO RADIO AUTOMATICA
+        // Annulliamo eventuali caricamenti radio precedenti
+        radioLoadingJob?.cancel()
+        radioLoadingJob = viewModelScope.launch {
+            try {
+                // Recuperiamo canzoni simili (Radio)
+                val radioSongs = repository.getRadio(song.videoId)
+
+                // Filtriamo per non riaggiungere quella che sta già suonando
+                val newSongs = radioSongs.filter { it.videoId != song.videoId }
+
+                if (newSongs.isNotEmpty()) {
+                    // Convertiamo in QueueItem
+                    val radioItems = newSongs.map { QueueItem(song = it) }
+
+                    // Aggiungiamo alla coda
+                    queue.addAll(radioItems)
+                    Log.d("MusicViewModel", "Radio caricata: ${radioItems.size} brani aggiunti")
+                }
+            } catch (e: Exception) {
+                Log.e("MusicViewModel", "Errore caricamento radio: ${e.message}")
+            }
         }
     }
 
-    fun removeSongAt(index: Int) {
-        if (index >= 0 && index < queue.size) {
-            // Se stiamo rimuovendo una canzone che viene PRIMA di quella corrente,
-            // dobbiamo abbassare l'indice corrente di 1 per mantenere la posizione corretta.
+    // 2. Play Next (Gesture Destra->Sinistra): Aggiunge SUBITO DOPO la corrente
+    fun playNext(song: Song) {
+        if (queue.isEmpty()) {
+            // Se la coda è vuota, la suoniamo direttamente
+            playSong(song)
+            return
+        }
+
+        // Calcoliamo la posizione corretta: Indice corrente + 1
+        // Usiamo coerceAtLeast(0) per sicurezza, ma currentSongIndex dovrebbe essere valido
+        val targetIndex = (currentSongIndex + 1).coerceAtMost(queue.size)
+
+        // CONTROLLO DUPLICATI "INTELLIGENTE"
+        // Se la canzone che c'è ESATTAMENTE in quella posizione è già lei, evitiamo di aggiungerla di nuovo.
+        // Questo previene l'aggiunta multipla se la gesture scatta due volte.
+        if (targetIndex < queue.size && queue[targetIndex].song.videoId == song.videoId) {
+            Log.d("MusicViewModel", "PlayNext ignorato: canzone già presente nella posizione successiva")
+            return
+        }
+
+        // Aggiungiamo il wrapper nella posizione calcolata
+        queue.add(targetIndex, QueueItem(song = song))
+        Log.d("MusicViewModel", "Aggiunta Play Next in posizione $targetIndex: ${song.title}")
+    }
+
+    // 3. Add to Queue (Gesture Sinistra->Destra): Aggiunge in FONDO
+    fun addQueue(song: Song) {
+        // Controllo duplicati sull'ultimo elemento per evitare spam da gesture
+        if (queue.isNotEmpty() && queue.last().song.videoId == song.videoId) {
+            Log.d("MusicViewModel", "AddQueue ignorato: canzone già presente in fondo")
+            return
+        }
+
+        if (queue.isEmpty()) {
+            playSong(song)
+        } else {
+            queue.add(QueueItem(song = song))
+        }
+    }
+
+    // 4. Click dentro la Coda: Cambia solo l'indice, non ricarica la coda
+    fun playQueueItem(item: QueueItem) {
+        val index = queue.indexOf(item)
+        if (index != -1) {
+            currentSongIndex = index
+            loadAndPlay(item.song)
+        }
+    }
+
+    // 5. Rimozione elemento (Swipe Delete)
+    fun removeQueueItem(item: QueueItem) {
+        val index = queue.indexOf(item)
+        if (index != -1) {
+            // Se rimuoviamo qualcosa prima della canzone corrente, aggiustiamo l'indice
             if (index < currentSongIndex) {
                 currentSongIndex--
             }
-            // Nota: Se rimuoviamo proprio la canzone corrente, l'indice rimane uguale
-            // e punterà alla prossima canzone (comportamento corretto).
-
             queue.removeAt(index)
         }
     }
 
-    /**
-     * 2. Aggiunge una canzone subito dopo quella corrente (Play Next).
-     */
-    fun playNext(song: Song) {
-        if (queue.isEmpty()) {
-            // Se la coda è vuota, riproduci direttamente
-            playSong(song)
-        } else {
-            // Inserisce la canzone all'indice successivo a quello corrente
-            val nextIndex = currentSongIndex + 1
-            queue.add(nextIndex, song)
+    // --- ALTRE FUNZIONI (Shuffle, Loop, Playlist, Player) ---
 
-            // Opzionale: Mostra un log o un feedback
-            Log.d("MusicViewModel", "Aggiunto in Play Next: ${song.title}")
-        }
+    fun toggleLoop() {
+        isLoopMode = !isLoopMode
     }
 
     fun toggleShuffle() {
         isShuffleMode = !isShuffleMode
-        // Qui in futuro aggiungerai la logica ExoPlayer:
-        // mediaController?.shuffleModeEnabled = isShuffleMode
+    }
+
+    fun optimizeQueue() {
+        val historyLimit = 5
+        if (currentSongIndex > historyLimit) {
+            val songsToRemove = currentSongIndex - historyLimit
+            queue.removeRange(0, songsToRemove)
+            currentSongIndex -= songsToRemove
+        }
     }
 
     fun playPlaylist(songs: List<Song>, startIndex: Int = 0, sourceName: String = "Playlist") {
-        queue.clear()
-        queue.addAll(songs)
-        currentSongIndex = startIndex
+        // Quando si avvia una playlist, non vogliamo la logica Radio, quindi puliamo il job
+        radioLoadingJob?.cancel()
 
-        // Impostiamo il titolo
+        queue.clear()
+        val newItems = songs.map { QueueItem(song = it) }
+        queue.addAll(newItems)
+
+        currentSongIndex = startIndex
         currentQueueTitle = sourceName
 
-        playSong(queue[startIndex])
+        if (startIndex in queue.indices) {
+            loadAndPlay(queue[startIndex].song)
+        }
     }
 
     fun playCollection(collection: YTCollection) {
         currentTitle = collection.title
         currentArtist = "Caricamento..."
         isBuffering = true
-
-        // Impostiamo il titolo (es. "Top 50 - Italy")
         currentQueueTitle = collection.title
+        radioLoadingJob?.cancel()
 
         viewModelScope.launch {
             val songs = repository.getPlaylistSongs(collection.id)
             if (songs.isNotEmpty()) {
-                // Passiamo il nome anche qui per sicurezza, anche se l'abbiamo settato sopra
                 playPlaylist(songs, startIndex = 0, sourceName = collection.title)
             } else {
                 currentArtist = "Errore caricamento"
                 isBuffering = false
-                Log.e("MusicViewModel", "Nessuna canzone trovata per la raccolta: ${collection.title}")
             }
         }
     }
@@ -149,18 +227,29 @@ class MusicViewModel : ViewModel() {
     fun skipToNext() {
         if (queue.isNotEmpty() && currentSongIndex < queue.lastIndex) {
             currentSongIndex++
-            loadAndPlay(queue[currentSongIndex])
+            loadAndPlay(queue[currentSongIndex].song)
         }
     }
 
+    fun skipToPrevious() {
+        if (progress > 0.05f) {
+            seekTo(0f)
+        } else {
+            if (queue.isNotEmpty() && currentSongIndex > 0) {
+                currentSongIndex--
+                loadAndPlay(queue[currentSongIndex].song)
+            }
+        }
+    }
+
+    // --- INIZIALIZZAZIONE E PLAYER ---
+
     fun initPlayer(context: Context) {
-        // 1. Inizializza Cookie
         cookieManager = CookieManager(context)
         val savedCookie = cookieManager.loadCookie()
         YouTubeClient.currentCookie = savedCookie
         isLoggedIn = savedCookie.isNotBlank()
 
-        // 2. Connettiti al MusicService
         val sessionToken = SessionToken(context, ComponentName(context, MusicService::class.java))
         val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
 
@@ -174,52 +263,11 @@ class MusicViewModel : ViewModel() {
         }, MoreExecutors.directExecutor())
     }
 
-    // --- START RADIO ---
-    fun startRadio(song: Song) {
-        queue.clear()
-        queue.add(song)
-        currentSongIndex = 0
-
-        // Impostiamo il titolo dinamico
-        currentQueueTitle = "Radio ${song.title}"
-
-        playSong(song)
-
-        viewModelScope.launch {
-            val radioSongs = repository.getRadio(song.videoId)
-
-            // Filtriamo la lista per non duplicare la canzone che sta già suonando
-            val newSongs = radioSongs.filter { it.videoId != song.videoId }
-
-            if (newSongs.isNotEmpty()) {
-                // Aggiungi le canzoni alla coda esistente
-                queue.addAll(newSongs)
-                Log.d("MusicViewModel", "Radio caricata: ${newSongs.size} brani aggiunti")
-            }
-        }
-    }
-
-    fun skipToPrevious() {
-        // Se siamo oltre i 3 secondi, riavvia la canzone corrente (comportamento standard tipo Spotify)
-        if (progress > 0.05f) { // circa il 5% o 3 secondi
-            seekTo(0f)
-        } else {
-            if (queue.isNotEmpty() && currentSongIndex > 0) {
-                currentSongIndex--
-                loadAndPlay(queue[currentSongIndex])
-            }
-        }
-    }
-
-    // --- FUNZIONI DI LOGIN (Quelle che mancavano) ---
-
     fun saveLoginCookie(cookie: String) {
         viewModelScope.launch {
             cookieManager.saveCookie(cookie)
             YouTubeClient.currentCookie = cookie
             isLoggedIn = true
-            // Nota: Non ricarichiamo la Home qui perché ora è gestita da HomeViewModel.
-            // L'utente vedrà i contenuti personalizzati al prossimo riavvio o refresh manuale.
         }
     }
 
@@ -231,8 +279,6 @@ class MusicViewModel : ViewModel() {
         }
     }
 
-    // --- LOGICA PLAYER ---
-
     private fun setupPlayerListeners() {
         mediaController?.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(playing: Boolean) {
@@ -243,7 +289,6 @@ class MusicViewModel : ViewModel() {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = (playbackState == Player.STATE_BUFFERING)
 
-                // AUTO-PLAY NEXT SONG
                 if (playbackState == Player.STATE_ENDED) {
                     if (currentSongIndex < queue.lastIndex) {
                         skipToNext()
@@ -275,7 +320,6 @@ class MusicViewModel : ViewModel() {
     }
 
     private fun loadAndPlay(song: Song) {
-        // UI Optimistic update
         currentTitle = song.title
         currentArtist = song.artist
         currentCoverUrl = song.coverUrl
@@ -305,50 +349,13 @@ class MusicViewModel : ViewModel() {
             } else {
                 Log.e("MusicViewModel", "URL Stream non trovato")
                 isBuffering = false
-                // Se fallisce, prova la prossima
                 skipToNext()
             }
         }
     }
 
-    fun playSong(song: Song) {
-        // Se la canzone non è nella queue attuale, puliamo e la mettiamo come singola
-        // (Oppure potresti aggiungerla in fondo, dipende dalla UX che vuoi)
-        if (!queue.contains(song)) {
-            queue.clear()
-            queue.add(song)
-            currentSongIndex = 0
-        } else {
-            currentSongIndex = queue.indexOf(song)
-        }
-
-        // ... (Il resto del tuo codice playSong esistente rimane uguale per ora) ...
-        // Assicurati solo di aggiornare currentSongIndex correttamente
-
-        loadAndPlay(song) // Ho rinominato la tua logica attuale in loadAndPlay per chiarezza
-    }
-
     fun playTestTrack() {
-        val testCoverUrl = "https://i.ytimg.com/vi/0h8Z-L0J-PA/maxresdefault.jpg"
-        val testTitle = "Jazz in Paris"
-        val testArtist = "Google Samples"
-
-        currentCoverUrl = testCoverUrl
-        currentTitle = testTitle
-        currentArtist = testArtist
-        currentSong = Song("test", testTitle, testArtist, testCoverUrl)
-
-        val item = MediaItem.Builder()
-            .setUri("https://storage.googleapis.com/exoplayer-test-media-0/Jazz_In_Paris.mp3")
-            .setMediaId("test")
-            .setMediaMetadata(MediaMetadata.Builder().setTitle(testTitle).setArtist(testArtist).setArtworkUri(Uri.parse(testCoverUrl)).build())
-            .build()
-
-        mediaController?.let {
-            it.setMediaItem(item)
-            it.prepare()
-            it.play()
-        }
+        // ... codice test esistente ...
     }
 
     fun togglePlayPause() {
