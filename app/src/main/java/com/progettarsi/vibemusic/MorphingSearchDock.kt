@@ -1,11 +1,13 @@
 package com.progettarsi.vibemusic
 
 import android.annotation.SuppressLint
+import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,17 +15,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp as lerpColor // Alias per evitare conflitti
+import androidx.compose.ui.graphics.lerp as lerpColor
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -39,10 +40,9 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
 import dev.chrisbanes.haze.hazeChild
-import java.io.Console
 
 @SuppressLint("UnusedBoxWithConstraintsScope")
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun MorphingSearchDock(
     searchState: SearchState,
@@ -65,7 +65,6 @@ fun MorphingSearchDock(
     val screenHeight = LocalConfiguration.current.screenHeightDp.dp
     val focusManager = LocalFocusManager.current
 
-    // OTTIMIZZAZIONE 1: Calcoli di base memorizzati o derivati
     val activeProgress by remember(searchProgress, playerProgress, profileProgress) {
         derivedStateOf { maxOf(searchProgress, playerProgress, profileProgress) }
     }
@@ -74,7 +73,6 @@ fun MorphingSearchDock(
         derivedStateOf { maxOf(playerProgress, profileProgress) }
     }
 
-    // Usiamo derivedStateOf per evitare ricalcoli inutili durante l'animazione
     val animatedHeight by remember(activeProgress, screenHeight) {
         derivedStateOf { lerp(80.dp, screenHeight, activeProgress) }
     }
@@ -84,11 +82,10 @@ fun MorphingSearchDock(
     }
 
     val bottomPadding by remember(fullScreenModeProgress) {
-        derivedStateOf { lerp(16.dp, 0.dp, fullScreenModeProgress) }
+        derivedStateOf { lerp(0.dp, 0.dp, fullScreenModeProgress) }
     }
 
     val glassColor = remember { Color(0xFF252530).copy(alpha = 0.65f) }
-    // Colore di fallback più coprente per quando Haze è spento durante l'animazione
     val fastGlassColor = remember { Color(0xFF252530).copy(alpha = 0.95f) }
     val borderStroke = remember { BorderStroke(1.dp, Color.White.copy(alpha = 0.1f)) }
     val hazeStyle = remember {
@@ -129,7 +126,6 @@ fun MorphingSearchDock(
 
                 val topSpacerHeight by remember(activeProgress, topPadding, searchProgress, fullScreenModeProgress) {
                     derivedStateOf {
-                        (topPadding * activeProgress) + (16.dp * searchProgress * (1f - fullScreenModeProgress))
                         val totalPadding = topPadding + 16.dp
                         totalPadding * searchProgress * (1f - fullScreenModeProgress)
                     }
@@ -142,8 +138,6 @@ fun MorphingSearchDock(
                 ) {
                     val availableWidth = maxWidth
 
-                    // OTTIMIZZAZIONE 3: Tutta la matematica pesante delle larghezze è "cachata" qui
-                    // Ricalcola SOLO se le progress bar cambiano.
                     val widthState by remember(activeProgress, availableWidth) {
                         derivedStateOf {
                             val animatedSpacerWidth = lerp(10.dp, 0.dp, fullScreenModeProgress)
@@ -184,11 +178,9 @@ fun MorphingSearchDock(
                         // A. PLAYER
                         if (targetPlayerWidth > 1.dp) {
                             val playerShape = if(playerProgress > 0.1f) RoundedCornerShape(0.dp) else RoundedCornerShape(32.dp)
-
                             val isStaticMiniPlayer = playerProgress < 0.01f
 
                             Surface(
-                                // Se non c'è blur, usa un colore leggermente più solido
                                 color = if (isStaticMiniPlayer) glassColor else fastGlassColor,
                                 shape = playerShape,
                                 border = if(playerProgress > 0.1f) null else borderStroke,
@@ -196,12 +188,10 @@ fun MorphingSearchDock(
                                     .width(targetPlayerWidth)
                                     .height(if(playerProgress > 0.1f) animatedHeight else 64.dp)
                                     .clip(playerShape)
-                                    // APPLICAZIONE CONDIZIONALE OTTIMIZZATA
                                     .then(if(isStaticMiniPlayer) Modifier.hazeChild(hazeState, style = hazeStyle) else Modifier)
                             ) {
                                 Box {
                                     if (playerProgress > 0.01f) {
-                                        // OTTIMIZZAZIONE 4: graphicsLayer invece di alpha
                                         Box(Modifier.graphicsLayer { alpha = playerProgress }) {
                                             SwipeToCloseContainer(onClose = onClose) {
                                                 MusicPlayerScreen(musicViewModel, onClose)
@@ -217,7 +207,7 @@ fun MorphingSearchDock(
                             }
                         }
 
-                        // B. SEARCH
+                        // B. SEARCH (HEADER)
                         if (targetSearchWidth > 1.dp) {
                             val searchShape = if(searchProgress > 0.2f) RoundedCornerShape(32.dp) else CircleShape
 
@@ -231,7 +221,13 @@ fun MorphingSearchDock(
                                     .clip(searchShape)
                                     .graphicsLayer { alpha = hideWhenProfileOpens }
                                     .hazeChild(state = hazeState, style = hazeStyle)
-                                    .clickable(onClick = onSearchClick)
+                                    // FIX GESTURE: Usiamo pointerInput+detectTapGestures invece di clickable.
+                                    // Questo permette allo swipe verticale del padre di passare attraverso.
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onTap = { onSearchClick() }
+                                        )
+                                    }
                             ) {
                                 val isExpanded = searchProgress > 0.8f
                                 DockSearchBarContent(isExpanded, searchViewModel, currentPlaceholder)
@@ -256,11 +252,7 @@ fun MorphingSearchDock(
                                 Box(contentAlignment = Alignment.Center) {
                                     if (profileProgress > 0.01f) {
                                         Box(Modifier.fillMaxSize().graphicsLayer { alpha = profileProgress }) {
-                                            ProfileScreenContent(
-                                                onClose = onClose,
-                                                musicViewModel = musicViewModel,
-                                                hazeState = hazeState
-                                            )
+                                            ProfileScreenContent(onClose = onClose, musicViewModel = musicViewModel, hazeState = hazeState)
                                         }
                                     }
                                     if (profileProgress < 0.99f) {
@@ -299,13 +291,58 @@ fun MorphingSearchDock(
                             else -> {
                                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                                     items(searchViewModel.searchResults.toList()) { song ->
-                                        SongResultItem(song) {
-                                            // PRIMA: musicViewModel.playSong(song)
-                                            // ORA:
-                                            musicViewModel.startRadio(song)
 
+                                        // FIX SWIPE PLAY NEXT (Senza duplicati e UI pulita)
+                                        var actionExecuted by remember { mutableStateOf(false) }
 
-                                            focusManager.clearFocus()
+                                        val dismissState = rememberSwipeToDismissBoxState(
+                                            confirmValueChange = { dismissValue ->
+                                                if (dismissValue == SwipeToDismissBoxValue.EndToStart && !actionExecuted) {
+                                                    musicViewModel.playNext(song)
+                                                    actionExecuted = true
+                                                    Toast.makeText(context, "Aggiunta in coda: ${song.title}", Toast.LENGTH_SHORT).show()
+                                                    false // Rimbalza indietro (non rimuove l'elemento)
+                                                } else {
+                                                    false
+                                                }
+                                            }
+                                        )
+
+                                        // Resetta il flag quando l'animazione di rimbalzo finisce
+                                        LaunchedEffect(dismissState.currentValue) {
+                                            if (dismissState.currentValue == SwipeToDismissBoxValue.Settled) {
+                                                actionExecuted = false
+                                            }
+                                        }
+
+                                        SwipeToDismissBox(
+                                            state = dismissState,
+                                            enableDismissFromStartToEnd = false,
+                                            enableDismissFromEndToStart = true,
+                                            backgroundContent = {
+                                                // Mostra lo sfondo SOLO durante lo swipe attivo
+                                                val isSwiping = dismissState.progress > 0.0f && dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart
+                                                if (isSwiping) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .fillMaxSize()
+                                                            .background(com.progettarsi.vibemusic.ui.theme.PurplePrimary)
+                                                            .padding(horizontal = 24.dp),
+                                                        contentAlignment = Alignment.CenterEnd
+                                                    ) {
+                                                        Icon(Icons.Default.PlaylistAdd, "Play Next", tint = Color.White)
+                                                    }
+                                                }
+                                            }
+                                        ) {
+                                            // Elemento UI Originale (Gestisce il click in autonomia)
+                                            SongResultItem(
+                                                song = song,
+                                                onClick = {
+                                                    musicViewModel.startRadio(song)
+                                                    focusManager.clearFocus()
+                                                }
+                                            )
                                         }
                                     }
                                 }

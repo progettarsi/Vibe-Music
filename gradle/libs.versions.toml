@@ -21,6 +21,7 @@ espressoCore = "3.7.0"
 composeBom = "2025.12.00"
 foundation = "1.10.0"
 benchmarkTraceprocessor = "1.4.1"
+foundationLayout = "1.10.0"
 
 [libraries]
 # Core Android
@@ -53,6 +54,7 @@ androidx-compose-animation-core = { group = "androidx.compose.animation", name =
 androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text" }
 androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundation" }
 androidx-benchmark-traceprocessor = { group = "androidx.benchmark", name = "benchmark-traceprocessor", version.ref = "benchmarkTraceprocessor" }
+androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
 
 [plugins]
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" } # Add this block

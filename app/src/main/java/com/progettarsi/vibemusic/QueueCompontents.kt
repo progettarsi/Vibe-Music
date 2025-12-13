@@ -1,32 +1,40 @@
 package com.progettarsi.vibemusic
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AllInclusive
-import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.LibraryMusic
-import androidx.compose.material.icons.rounded.Shuffle
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.rounded.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -36,114 +44,205 @@ import com.progettarsi.vibemusic.ui.theme.PurplePrimary
 import com.progettarsi.vibemusic.ui.theme.SurfaceHighlight
 import com.progettarsi.vibemusic.ui.theme.TextGrey
 import com.progettarsi.vibemusic.viewmodel.MusicViewModel
+import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QueueScreen(
     musicViewModel: MusicViewModel,
     onClose: () -> Unit
 ) {
     val queue = musicViewModel.queue
-    val currentIndex = musicViewModel.currentSongIndex
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
 
-    // --- WRAPPER FONDAMENTALE ---
-    // Avvolge tutto il contenuto. Gestisce lo swipe sulla lista e sullo sfondo.
-    SwipeToCloseContainer(
-        onClose = onClose
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFF121212).copy(alpha = 0.98f))
-                // Blocca i click "dietro" la coda, ma non interferisce con lo scroll
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { }
-        ) {
-            // --- LISTA ---
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 80.dp),
-                modifier = Modifier.padding(horizontal = 16.dp)
-            ) {
-                // Spazio per la status bar (così la lista scorre "sotto" l'orologio ma parte giusta)
-                item {
-                    Spacer(Modifier.height(WindowInsets.statusBars.asPaddingValues().calculateTopPadding()+8.dp))
+    // Configurazione Schermo per animazione uscita
+    val configuration = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenHeightPx = remember(configuration, density) {
+        with(density) { configuration.screenHeightDp.dp.toPx() }
+    }
+
+    // Offset per animazione chiusura finestra
+    val offsetY = remember { Animatable(0f, Float.VectorConverter) }
+
+    // Gestione Gesture Chiusura Finestra
+    val nestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (offsetY.value > 0f) {
+                    val newOffset = (offsetY.value + available.y).coerceAtLeast(0f)
+                    val delta = newOffset - offsetY.value
+                    scope.launch { offsetY.snapTo(newOffset) }
+                    return if (available.y < 0) available else Offset(0f, delta)
                 }
+                return Offset.Zero
+            }
 
-                itemsIndexed(queue) { index, song ->
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0) {
+                    val newOffset = (offsetY.value + available.y).coerceAtLeast(0f)
+                    scope.launch { offsetY.snapTo(newOffset) }
+                    return available
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                if (offsetY.value > 150f) {
+                    offsetY.animateTo(
+                        targetValue = screenHeightPx,
+                        animationSpec = tween(durationMillis = 250, easing = FastOutLinearInEasing)
+                    )
+                    onClose()
+                } else {
+                    offsetY.animateTo(0f, animationSpec = tween(durationMillis = 300))
+                }
+                return super.onPostFling(consumed, available)
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        musicViewModel.optimizeQueue()
+        if (musicViewModel.currentSongIndex >= 0) {
+            listState.scrollToItem(musicViewModel.currentSongIndex)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer { translationY = offsetY.value }
+            .background(Color(0xFF121212).copy(alpha = 0.98f))
+            .clickable(interactionSource = null, indication = null) {}
+            .nestedScroll(nestedScrollConnection)
+    ) {
+        LazyColumn(
+            state = listState,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 80.dp),
+            modifier = Modifier.padding(horizontal = 16.dp)
+        ) {
+            item { Box(modifier = Modifier.statusBarsPadding()) }
+
+            itemsIndexed(
+                items = queue,
+                // Usiamo una key unica se possibile, altrimenti l'URL o l'indice.
+                // Questo aiuta l'animazione di rimozione a essere fluida.
+                key = { _, song -> song.mediaId ?: song.hashCode() }
+            ) { index, song ->
+
+                val isPlaying = index == musicViewModel.currentSongIndex
+
+                // Impediamo di rimuovere la canzone attualmente in riproduzione
+                val canDismiss = !isPlaying
+
+                if (canDismiss) {
+                    val dismissState = rememberSwipeToDismissBoxState(
+                        confirmValueChange = { dismissValue ->
+                            // Swipe DA SINISTRA A DESTRA (StartToEnd)
+                            if (dismissValue == SwipeToDismissBoxValue.StartToEnd) {
+                                musicViewModel.removeSongAt(index)
+                                true // Conferma la rimozione
+                            } else {
+                                false
+                            }
+                        }
+                    )
+
+                    SwipeToDismissBox(
+                        state = dismissState,
+                        enableDismissFromStartToEnd = true, // Abilita solo sinistra -> destra
+                        enableDismissFromEndToStart = false,
+                        backgroundContent = {
+                            val color = Color(0xFFCF6679) // Rosso Material Desaturato (Dark Mode friendly)
+
+                            // Visualizziamo lo sfondo solo se stiamo trascinando verso destra
+                            if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(12.dp)) // Stesso round dell'item
+                                        .background(color)
+                                        .padding(horizontal = 20.dp),
+                                    contentAlignment = Alignment.CenterStart // Icona a Sinistra
+                                ) {
+                                    Icon(
+                                        Icons.Default.Close,
+                                        contentDescription = "Remove",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+                        }
+                    ) {
+                        QueueItem(
+                            song = song,
+                            isPlaying = isPlaying,
+                            onClick = { musicViewModel.playSong(song) }
+                        )
+                    }
+                } else {
+                    // Se è la canzone corrente, renderizzala normalmente senza swipe
                     QueueItem(
                         song = song,
-                        isPlaying = index == currentIndex,
+                        isPlaying = isPlaying,
                         onClick = { musicViewModel.playSong(song) }
                     )
                 }
             }
+        }
 
-            // Sfumature (Opzionali)
-            Box(modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.05f)
-                .background(Brush.verticalGradient(listOf(DarkBackground, Color.Transparent)))
-                .align(Alignment.TopCenter)
-            )
-            Box(modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.1f)
-                .background(Brush.verticalGradient(listOf(Color.Transparent, DarkBackground.copy(0.7f), DarkBackground)))
-                .align(Alignment.BottomCenter)
-            )
+        // Sfumature
+        Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.05f)
+            .background(Brush.verticalGradient(listOf(DarkBackground, Color.Transparent)))
+            .align(Alignment.TopCenter))
 
-            // --- DOCK IN BASSO (Rimane uguale) ---
-            Row(
+        Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.1f)
+            .background(Brush.verticalGradient(listOf(Color.Transparent, DarkBackground.copy(0.6f), DarkBackground)))
+            .align(Alignment.BottomCenter))
+
+        // Controlli inferiori
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .align(Alignment.BottomEnd),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(all = 16.dp)
-                    .align(Alignment.BottomEnd),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .weight(1f)
+                    .height(50.dp)
+                    .clip(RoundedCornerShape(100.dp))
+                    .background(SurfaceHighlight)
+                    .clickable(onClick = onClose)
+                    .padding(horizontal = 16.dp),
+                contentAlignment = Alignment.CenterStart
             ) {
-                // ... (Il tuo codice dei pulsanti From, Loop, Shuffle) ...
-                // Nota: Incolla qui il codice dei pulsanti che avevi prima
-                // Tasto FROM (Chiudi)
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(50.dp)
-                        .clip(RoundedCornerShape(100.dp))
-                        .background(SurfaceHighlight)
-                        .clickable(onClick = onClose)
-                        .padding(horizontal = 16.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(Icons.Rounded.LibraryMusic, null, tint = Color.White, modifier = Modifier.size(20.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("From: ", color = TextGrey, fontSize = 14.sp)
-                            Text(musicViewModel.currentQueueTitle, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Rounded.LibraryMusic, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("From: ", color = TextGrey, fontSize = 14.sp)
+                        Text(musicViewModel.currentQueueTitle, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-
-                // Tasti Loop/Shuffle (usa i viewModel.toggle...)
-                IconButton(onClick = { musicViewModel.toggleLoop() }, modifier = Modifier.clip(CircleShape).size(50.dp).background(if(musicViewModel.isLoopMode) PurplePrimary.copy(0.2f) else SurfaceHighlight)) {
-                    Icon(Icons.Default.AllInclusive, null, tint = if(musicViewModel.isLoopMode) PurplePrimary else TextGrey)
-                }
-                IconButton(onClick = { musicViewModel.toggleShuffle() }, modifier = Modifier.clip(CircleShape).size(50.dp).background(if(musicViewModel.isShuffleMode) PurplePrimary.copy(0.2f) else SurfaceHighlight)) {
-                    Icon(Icons.Rounded.Shuffle, null, tint = if(musicViewModel.isShuffleMode) PurplePrimary else TextGrey)
-                }
+            }
+            IconButton(onClick = { musicViewModel.toggleLoop() }, modifier = Modifier.size(50.dp).clip(CircleShape).background(if (musicViewModel.isLoopMode) PurplePrimary.copy(alpha = 0.2f) else SurfaceHighlight)) {
+                Icon(Icons.Default.AllInclusive, null, tint = if (musicViewModel.isLoopMode) PurplePrimary else TextGrey, modifier = Modifier.size(24.dp))
+            }
+            IconButton(onClick = { musicViewModel.toggleShuffle() }, modifier = Modifier.size(50.dp).clip(CircleShape).background(if (musicViewModel.isShuffleMode) PurplePrimary.copy(alpha = 0.2f) else SurfaceHighlight)) {
+                Icon(Icons.Rounded.Shuffle, null, tint = if (musicViewModel.isShuffleMode) PurplePrimary else TextGrey, modifier = Modifier.size(20.dp))
             }
         }
     }
 }
 
-// ... (QueueItem e Preview rimangono invariati)
 @Composable
 fun QueueItem(song: Song, isPlaying: Boolean, onClick: () -> Unit) {
-    // ... (Il tuo codice QueueItem precedente) ...
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -153,28 +252,11 @@ fun QueueItem(song: Song, isPlaying: Boolean, onClick: () -> Unit) {
             .padding(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(SurfaceHighlight),
-            contentAlignment = Alignment.Center
-        ) {
+        Box(modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)).background(SurfaceHighlight), contentAlignment = Alignment.Center) {
+            AsyncImage(model = song.coverUrl, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
             if (isPlaying) {
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(0.4f)))
                 Icon(Icons.Rounded.GraphicEq, null, tint = PurplePrimary)
-                AsyncImage(
-                    model = song.coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize().alpha(0.7f),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                AsyncImage(
-                    model = song.coverUrl,
-                    contentDescription = null,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
             }
         }
         Spacer(modifier = Modifier.width(12.dp))

@@ -189,7 +189,6 @@ fun SongResultItem(song: Song, onClick: () -> Unit) {
                 Text(song.title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                 Text(song.artist, color = TextGrey, fontSize = 14.sp, maxLines = 1)
             }
-            Icon(Icons.Default.PlayArrow, null, tint = TextGrey.copy(0.5f), modifier = Modifier.size(24.dp))
         }
         HorizontalDivider(color = Color.White.copy(alpha = 0.05f), modifier = Modifier.padding(horizontal = 16.dp))
     }

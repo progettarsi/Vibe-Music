@@ -27,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -45,6 +46,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.progettarsi.vibemusic.model.CollectionType
 import com.progettarsi.vibemusic.model.Playlist
 import com.progettarsi.vibemusic.model.Song
 import com.progettarsi.vibemusic.model.YTCollection
@@ -59,7 +61,8 @@ fun YourRadioButton(onClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 16.dp)
             .height(120.dp)
             .clip(RoundedCornerShape(24.dp))
             .background(
@@ -75,7 +78,7 @@ fun YourRadioButton(onClick: () -> Unit) {
             horizontalArrangement = Arrangement.Center
         ) {
             Icon(
-                imageVector = Icons.Default.Shuffle,
+                imageVector = Icons.Rounded.Shuffle,
                 contentDescription = "Your Radio",
                 tint = Color.White,
                 modifier = Modifier.size(48.dp)
@@ -93,7 +96,7 @@ fun YourRadioButton(onClick: () -> Unit) {
 
 @Composable
 fun HomeSection(title: String, content: @Composable () -> Unit) {
-    Column(modifier = Modifier.padding(vertical = 16.dp)) {
+    Column(modifier = Modifier.padding(bottom = 24.dp)) { // Padding inferiore per staccare le sezioni
         Text(
             text = title,
             color = Color.White,
@@ -101,7 +104,7 @@ fun HomeSection(title: String, content: @Composable () -> Unit) {
             fontWeight = FontWeight.Bold,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
-        Spacer(modifier = Modifier.fillMaxHeight(0.01f))
+        Spacer(modifier = Modifier.height(12.dp)) // Spazio fisso tra titolo e griglia
         content()
     }
 }
@@ -109,44 +112,46 @@ fun HomeSection(title: String, content: @Composable () -> Unit) {
 // --- LA TUA FUNZIONE MODIFICATA ---
 // Ora accetta List<Song> e mostra i placeholder magenta
 @Composable
-fun QuickPicksRow(songs: List<Song>, onItemClick: (Song) -> Unit) {
-    val spacing = 16.dp // Definisci la spaziatura uguale per altezza e larghezza
+fun QuickPicksRow(
+    collections: List<YTCollection>,
+    onItemClick: (YTCollection) -> Unit
+) {
+    val spacing = 12.dp
+    val sidePadding = 16.dp
 
-    Row(
+    // 1. CONTENITORE PRINCIPALE (Il Quadrato)
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f) // Rende il contenitore un quadrato perfetto
-            .padding(16.dp),
-        // 1. Spaziatura Orizzontale uguale
-        horizontalArrangement = Arrangement.spacedBy(spacing)
+            .padding(horizontal = sidePadding) // Padding esterno
+            .aspectRatio(1f), // Forza l'aspetto quadrato SU TUTTO IL BLOCCO
+        verticalArrangement = Arrangement.spacedBy(spacing) // Spazio verticale tra le righe
     ) {
-        repeat(3) { colIndex ->
-            Column(
+        // 2. CICLO PER LE 3 RIGHE
+        repeat(3) { rowIndex ->
+            Row(
                 modifier = Modifier
-                    .weight(1f)      // Prende esattamente 1/3 della larghezza disponibile
-                    .fillMaxHeight(), // Si estende per tutta l'altezza
-                // 2. Spaziatura Verticale uguale (identica a quella orizzontale)
-                verticalArrangement = Arrangement.spacedBy(spacing)
+                    .weight(1f) // Importante: Ogni riga occupa 1/3 dell'altezza totale
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing) // Spazio orizzontale tra gli item
             ) {
-                repeat(3) { rowIndex ->
-                    // CALCOLO INDICE:
-                    // Vogliamo riempire: Riga 0 (0,1,2), Riga 1 (3,4,5)...
-                    // Formula: (NumeroRiga * 3) + NumeroColonna
+                // 3. CICLO PER I 3 ELEMENTI NELLA RIGA
+                repeat(3) { colIndex ->
                     val index = (rowIndex * 3) + colIndex
+                    val collection = collections.getOrNull(index)
 
-                    // Recuperiamo la canzone in sicurezza
-                    val song = songs.getOrNull(index)
-
-                    if (song != null) {
-                        QuickPicksSong(
-                            song = song,
+                    if (collection != null) {
+                        QuickPicksCollectionItem(
+                            collection = collection,
                             onItemClick = onItemClick,
-                            modifier = Modifier.weight(1f)
+                            // L'item deve riempire la sua "cella" della griglia
+                            modifier = Modifier
+                                .weight(1f)      // 1/3 della larghezza
+                                .fillMaxHeight() // Tutta l'altezza della riga
                         )
                     } else {
-                        // Se non c'è una canzone (es. lista da 7 brani),
-                        // mettiamo un box vuoto invisibile per mantenere la struttura
-                        Spacer(modifier = Modifier.weight(1f))
+                        // Se non c'è la collection, mantieni lo spazio occupato ma vuoto
+                        Spacer(modifier = Modifier.weight(1f).fillMaxHeight())
                     }
                 }
             }
@@ -159,36 +164,48 @@ fun QuickPicksCollectionsRow(
     collections: List<YTCollection>,
     onItemClick: (YTCollection) -> Unit
 ) {
-    val spacing = 16.dp // Definisci la spaziatura uguale per altezza e larghezza
+    val spacing = 12.dp // Spazio tra i quadratini
+    val sidePadding = 16.dp // Spazio laterale dallo schermo
 
-    Row(
+    // BoxWithConstraints ci dà la larghezza esatta dello schermo in questo momento
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f) // Rende il contenitore un quadrato perfetto
-            .padding(16.dp),
-        // 1. Spaziatura Orizzontale uguale
-        horizontalArrangement = Arrangement.spacedBy(spacing)
+            .padding(horizontal = sidePadding)
     ) {
-        repeat(3) { colIndex ->
-            Column(
-                modifier = Modifier
-                    .weight(1f)      // Prende esattamente 1/3 della larghezza disponibile
-                    .fillMaxHeight(), // Si estende per tutta l'altezza
-                // 2. Spaziatura Verticale uguale (identica a quella orizzontale)
-                verticalArrangement = Arrangement.spacedBy(spacing)
-            ) {
-                repeat(3) { rowIndex ->
-                    // CALCOLO INDICE:
-                    // Vogliamo riempire: Riga 0 (0,1,2), Riga 1 (3,4,5)...
-                    // Formula: (NumeroRiga * 3) + NumeroColonna
-                    val index = (rowIndex * 3) + colIndex
+        // MATEMATICA:
+        // Larghezza disponibile = LarghezzaSchermo - (padding laterali già tolti dal modifier)
+        // Spazio occupato dai "buchi" vuoti = spacing * 2 (ci sono 2 spazi tra 3 colonne)
+        // Larghezza di UN quadrato = (TuttoIlResto) / 3
+        val itemSize = (maxWidth - (spacing * 2)) / 3
 
-                    // Recuperiamo la canzone in sicurezza
-                    val item = collections.getOrNull(index)
-                    if (item != null) {
-                        // Qui dentro devi usare i dati di YTCollection (title, coverUrl)
-                        // Puoi riusare il layout grafico di QuickPicksSong, basta passare i dati giusti
-                        QuickPicksCollectionItem(item, onItemClick)
+        // Costruiamo la griglia: Una Colonna che contiene 3 Righe
+        Column(
+            verticalArrangement = Arrangement.spacedBy(spacing)
+        ) {
+            repeat(3) { rowIndex ->
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(spacing),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    repeat(3) { colIndex ->
+                        // Calcolo indice: (Riga * 3) + Colonna
+                        // Riga 0 -> 0, 1, 2
+                        // Riga 1 -> 3, 4, 5 ...
+                        val index = (rowIndex * 3) + colIndex
+                        val collection = collections.getOrNull(index)
+
+                        if (collection != null) {
+                            QuickPicksCollectionItem(
+                                collection = collection,
+                                onItemClick = onItemClick,
+                                // FORZIAMO la dimensione calcolata. Niente weight, niente aspectRatio.
+                                modifier = Modifier.size(itemSize)
+                            )
+                        } else {
+                            // Se manca l'elemento, mettiamo un buco vuoto della stessa misura
+                            Spacer(modifier = Modifier.size(itemSize))
+                        }
                     }
                 }
             }
@@ -201,53 +218,46 @@ fun QuickPicksCollectionsRow(
 @Composable
 fun QuickPicksCollectionItem(
     collection: YTCollection,
-    onItemClick: (YTCollection) -> Unit
+    onItemClick: (YTCollection) -> Unit,
+    modifier: Modifier = Modifier // <--- Importante: Default parameter
 ) {
     val placeholder = rememberVectorPainter(Icons.Default.Album)
 
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(12.dp))
+    Box(
+        modifier = modifier // Usiamo il modifier (con .size) passato dal padre
+            .clip(RoundedCornerShape(8.dp)) // Angoli un po' più eleganti (8dp o 12dp)
             .background(SurfaceDark)
-            // 1. Rendi l'intero box cliccabile
             .clickable { onItemClick(collection) }
     ) {
         AsyncImage(
             model = collection.coverUrl,
             contentDescription = collection.title,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(SurfaceDark),
+            modifier = Modifier.fillMaxSize(), // Riempie il box di dimensione fissa
             contentScale = ContentScale.Crop,
             placeholder = placeholder,
             error = placeholder,
             fallback = placeholder
         )
 
-        // 2. Tasto Play (rimosso TODO)
-        // Nota: Puoi decidere se il tasto Play fa la stessa cosa del click sulla card
-        IconButton(
-            onClick = { onItemClick(collection) },
-            modifier = Modifier.fillMaxSize(0.7f).align(Alignment.Center)
-        ) {
-            Icon(Icons.Rounded.PlayArrow, null, tint = Color.White.copy(0.7f), modifier = Modifier.fillMaxSize(0.7f))
-        }
-
+        // Sfumatura nera in basso per leggere il testo
         Box(modifier = Modifier
             .fillMaxWidth()
             .align(Alignment.BottomCenter)
-            .fillMaxHeight(0.5f)
+            .fillMaxHeight(0.6f)
             .background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black)))
         )
 
         Text(
-            text = if(collection.title.isNotEmpty()){if (collection.title.length > 15) collection.title.take(15) + "..." else collection.title} else "Raccolta",
+            text = if (collection.title.isNotEmpty()) collection.title else "Raccolta",
             color = Color.White,
-            fontSize = (maxWidth.value * 0.10f).sp,
+            fontSize = 11.sp, // Font più piccolo e leggibile
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = (maxHeight.value*0.08f).dp)
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            lineHeight = 12.sp,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(6.dp)
         )
     }
 }
@@ -256,17 +266,16 @@ fun QuickPicksCollectionItem(
 fun QuickPicksSong(
     song: Song,
     onItemClick: (Song) -> Unit,
-    modifier: Modifier
+    modifier: Modifier // Questo modifier contiene già il .weight(1f) passato dal padre
 ) {
     val placeholder = rememberVectorPainter(Icons.Default.Album)
 
     BoxWithConstraints(
-        modifier = modifier // Usa il modifier passato
+        modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(1f)
-            .clip(RoundedCornerShape(12.dp))
+            // Rimuovi .aspectRatio(1f) qui, lascia che sia il layout padre a decidere l'altezza
+            .clip(RoundedCornerShape(8.dp)) // 8dp o 12dp è più elegante per griglie piccole
             .background(SurfaceDark)
-            // 1. Rendi cliccabile
             .clickable { onItemClick(song) }
     ) {
         AsyncImage(
@@ -281,36 +290,26 @@ fun QuickPicksSong(
             fallback = placeholder
         )
 
-        // 2. Rimosso TODO
-        IconButton(
-            onClick = { onItemClick(song) },
-            modifier = Modifier.fillMaxSize(0.7f).align(Alignment.Center)
-        ) {
-            Icon(Icons.Rounded.PlayArrow, null, tint = Color.White.copy(0.7f), modifier = Modifier.fillMaxSize(0.7f))
-        }
-
+        // Gradiente e Testo
         Box(modifier = Modifier
             .fillMaxWidth()
             .align(Alignment.BottomCenter)
-            .fillMaxHeight(0.5f)
+            .fillMaxHeight(0.6f) // Gradiente leggermente più alto per leggibilità
             .background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black)))
         )
 
         Text(
-            text = if(song.title.isNotEmpty()){if (song.title.length > 15) song.title.take(15) + "..." else song.title} else "Brano",
+            text = song.title,
             color = Color.White,
-            fontSize = (maxWidth.value * 0.10f).sp,
+            fontSize = 11.sp, // Font più piccolo per stare nella griglia
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = (maxHeight.value*0.08f).dp)
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 6.dp, start = 4.dp, end = 4.dp)
         )
     }
-}
-
-@Preview
-@Composable
-fun QuickPicksSongsPreview()
-{
-    QuickPicksSong(song = mockSongs[0], onItemClick = {}, modifier = Modifier)
 }
 
 @Composable
@@ -398,6 +397,15 @@ val mockSongs = listOf(
     Song("id8", "Canzone 8", "Artista H", "https://placehold.co/400/919191/FFFFFF?text=8", 270000),
     Song("id9", "Canzone 9", "Artista I", "https://placehold.co/400/a2a2a2/FFFFFF?text=9", 280000)
 )
+val mockCollections = List(9) { i ->
+    YTCollection(
+        id = "id$i",
+        title = "Mix $i",
+        coverUrl = "https://placehold.co/400/1a1a1a/FFFFFF?text=Mix+$i",
+        subtitle = "",
+        type = CollectionType.PLAYLIST
+    )
+}
 
 // --- PREVIEW ---
 @Preview(showBackground = true, backgroundColor = 0xFF121212)
@@ -418,7 +426,7 @@ fun HomeScreenUiPreview() {
 
         // Testiamo la tua nuova QuickPicksRow
         HomeSection(title = "Quick Picks") {
-            QuickPicksRow(songs = mockSongs, onItemClick = {})
+            QuickPicksRow(mockCollections, onItemClick = {})
         }
 
         // Testiamo New Drops

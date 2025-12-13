@@ -22,8 +22,8 @@ import kotlin.math.roundToInt
 @Composable
 fun SwipeToCloseContainer(
     enabled: Boolean = true,
-    resistanceFactor: Float = 1.0f,
-    maxDragOffset: Float = 400f, // NUOVO: Limite massimo di trascinamento (pixel)
+    resistanceFactor: Float = 0.7f,
+    maxDragOffset: Float = 600f,
     onClose: () -> Unit,
     content: @Composable () -> Unit
 ) {
@@ -36,10 +36,7 @@ fun SwipeToCloseContainer(
     val performFastReset = {
         scope.launch {
             resetAnim.snapTo(rawDragOffset)
-            resetAnim.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing)
-            ) {
+            resetAnim.animateTo(0f, animationSpec = tween(300, easing = FastOutSlowInEasing)) {
                 rawDragOffset = value
             }
             rawDragOffset = 0f
@@ -47,41 +44,41 @@ fun SwipeToCloseContainer(
     }
 
     LaunchedEffect(enabled) {
-        if (!enabled && rawDragOffset > 0f) {
-            performFastReset()
+        if (!enabled) {
+            rawDragOffset = 0f
+            resetAnim.snapTo(0f)
         }
     }
 
+    // Questa connessione gestisce lo scroll proveniente dalle liste (LazyColumn)
     val nestedScrollConnection = remember(enabled) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (!enabled) return Offset.Zero
-                if (rawDragOffset > 0f) {
-                    // Applichiamo il limite massimo (maxDragOffset)
-                    val newOffset = (rawDragOffset + available.y).coerceIn(0f, maxDragOffset)
+                // Se stiamo già trascinando la finestra (offset > 0) e l'utente spinge SU,
+                // consumiamo l'evento per riportare la finestra a 0 prima di scrollare la lista.
+                if (rawDragOffset > 0f && available.y < 0) {
+                    val newOffset = (rawDragOffset + available.y).coerceAtLeast(0f)
+                    val consumed = rawDragOffset - newOffset
                     rawDragOffset = newOffset
-                    return Offset(0f, available.y)
+                    return Offset(0f, -consumed)
                 }
                 return Offset.Zero
             }
 
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 if (!enabled) return Offset.Zero
+                // Se la lista è finita (overscroll) e l'utente tira GIÙ (available.y > 0)
                 if (available.y > 0) {
-                    // Applichiamo il limite anche qui
                     rawDragOffset = (rawDragOffset + available.y).coerceIn(0f, maxDragOffset)
-                    return Offset(0f, available.y)
+                    return Offset(0f, available.y) // Consumiamo l'evento
                 }
                 return Offset.Zero
             }
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
                 if (!enabled) return super.onPostFling(consumed, available)
-
-                val isFlingDown = available.y > 1000f
-                val isPastThreshold = rawDragOffset > 150f
-
-                if (isPastThreshold || isFlingDown) {
+                if (rawDragOffset > 200f) { // Soglia chiusura
                     onClose()
                     performFastReset()
                 } else if (rawDragOffset > 0f) {
@@ -97,21 +94,22 @@ fun SwipeToCloseContainer(
             .fillMaxSize()
             .offset { IntOffset(0, visualOffset.roundToInt()) }
             .nestedScroll(nestedScrollConnection)
+            // Aggiungiamo ANCHE un rilevatore di drag generico per le parti della UI che non sono liste
+            // (es. header della ricerca, spazi vuoti).
             .pointerInput(enabled) {
                 if (enabled) {
                     detectVerticalDragGestures(
                         onDragEnd = {
-                            if (rawDragOffset > 150f) {
+                            if (rawDragOffset > 200f) {
                                 onClose()
                                 performFastReset()
-                            } else if (rawDragOffset > 0f) {
+                            } else {
                                 performFastReset()
                             }
                         },
-                        onVerticalDrag = { change, dragAmount ->
-                            if (rawDragOffset > 0f || dragAmount > 0f) {
-                                change.consume()
-                                // Applichiamo il limite anche al drag diretto
+                        onVerticalDrag = { _, dragAmount ->
+                            // Attiviamo solo se stiamo tirando giù o se la finestra è già mossa
+                            if (dragAmount > 0 || rawDragOffset > 0f) {
                                 rawDragOffset = (rawDragOffset + dragAmount).coerceIn(0f, maxDragOffset)
                             }
                         }

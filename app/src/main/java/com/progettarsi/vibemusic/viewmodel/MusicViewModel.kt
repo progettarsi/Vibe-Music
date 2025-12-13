@@ -62,6 +62,52 @@ class MusicViewModel : ViewModel() {
         // mediaController?.repeatMode = if(isLoopMode) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
     }
 
+    fun optimizeQueue() {
+        val historyLimit = 5
+        // Se siamo oltre la 5a canzone (indice > 5)
+        if (currentSongIndex > historyLimit) {
+            val songsToRemove = currentSongIndex - historyLimit
+
+            // Rimuoviamo le canzoni vecchie dall'inizio della lista
+            queue.removeRange(0, songsToRemove)
+
+            // IMPORTANTISSIMO: Dobbiamo aggiornare l'indice corrente perché
+            // la canzone che stiamo ascoltando è scivolata indietro nella lista!
+            currentSongIndex -= songsToRemove
+        }
+    }
+
+    fun removeSongAt(index: Int) {
+        if (index >= 0 && index < queue.size) {
+            // Se stiamo rimuovendo una canzone che viene PRIMA di quella corrente,
+            // dobbiamo abbassare l'indice corrente di 1 per mantenere la posizione corretta.
+            if (index < currentSongIndex) {
+                currentSongIndex--
+            }
+            // Nota: Se rimuoviamo proprio la canzone corrente, l'indice rimane uguale
+            // e punterà alla prossima canzone (comportamento corretto).
+
+            queue.removeAt(index)
+        }
+    }
+
+    /**
+     * 2. Aggiunge una canzone subito dopo quella corrente (Play Next).
+     */
+    fun playNext(song: Song) {
+        if (queue.isEmpty()) {
+            // Se la coda è vuota, riproduci direttamente
+            playSong(song)
+        } else {
+            // Inserisce la canzone all'indice successivo a quello corrente
+            val nextIndex = currentSongIndex + 1
+            queue.add(nextIndex, song)
+
+            // Opzionale: Mostra un log o un feedback
+            Log.d("MusicViewModel", "Aggiunto in Play Next: ${song.title}")
+        }
+    }
+
     fun toggleShuffle() {
         isShuffleMode = !isShuffleMode
         // Qui in futuro aggiungerai la logica ExoPlayer:

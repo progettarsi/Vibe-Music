@@ -1,5 +1,6 @@
 package com.progettarsi.vibemusic
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -87,9 +88,10 @@ fun HomeScreenContent(
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(
-                top = topPadding + 16.dp,
-                bottom = bottomPadding + 80.dp
-            )
+                top = topPadding,
+                bottom = bottomPadding
+            ),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
             // Header
             item {
